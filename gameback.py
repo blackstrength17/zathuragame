@@ -8,11 +8,11 @@ import json
 
 # --- CONFIGURATION (MUST BE EDITED) ---
 # 1. Replace with the API Token you got from BotFather
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+BOT_TOKEN = "8574405914:AAHkq1xhlQZvf3dAZ36QIzK2PmSHCQ_ZTIA"
 # 2. Replace with the Game Short Name you registered with BotFather (e.g., "TelegramFlyer")
-GAME_SHORT_NAME = "YOUR_GAME_SHORT_NAME"
+GAME_SHORT_NAME = "ZathuraGame"
 # 3. Replace with the public HTTPS URL where you hosted 'game.html'
-HOSTED_GAME_URL = "https://YOUR_HOSTED_GAME_URL/game.html"
+HOSTED_GAME_URL = "https://zathuragame1.vercel.app/game.html"
 # 4. Webhook URL will be provided by your hosting service (e.g., Render/Heroku)
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 # 5. Port required by the hosting service
