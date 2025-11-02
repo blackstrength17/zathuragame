@@ -1,1 +1,1 @@
-web: gunicorn gameback:run_app
+gunicorn gameback:run_app
