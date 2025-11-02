@@ -65,6 +65,7 @@
             visibility: hidden;
             transition: opacity 0.5s;
             border-radius: 15px;
+            cursor: pointer; /* Enable clicking the whole box to retry */
         }
         #message-box.active {
             opacity: 1;
@@ -79,46 +80,18 @@
         .final-score {
             font-size: 2em;
             color: #00FFFF;
-            margin-bottom: 20px;
+            margin-bottom: 5px;
         }
-        .buttons-container {
-            display: flex;
-            gap: 15px;
-            margin-top: 20px;
+        #retry-instruction {
+            font-size: 1.2em;
+            color: #E0E0E0;
+            margin-top: 30px;
+            animation: pulse 1.5s infinite;
         }
-        .game-button {
-            padding: 12px 25px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 5px 0 #333333;
-            text-transform: uppercase;
-        }
-        .game-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 7px 0 #333333;
-        }
-        .game-button:active {
-            transform: translateY(3px);
-            box-shadow: 0 2px 0 #333333;
-        }
-        #retry-button {
-            background: linear-gradient(145deg, #00FFFF, #00BFFF);
-            color: #1a1a3a;
-            box-shadow: 0 5px 0 #008888;
-        }
-        #submit-button {
-            background: linear-gradient(145deg, #4CAF50, #2E8B57);
-            color: white;
-            box-shadow: 0 5px 0 #2E6B39;
-        }
-        #share-button {
-            background: linear-gradient(145deg, #FF9800, #FF7F50);
-            color: #1a1a3a;
-            box-shadow: 0 5px 0 #C67C00;
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
         }
     </style>
     <!-- Telegram Game SDK -->
@@ -137,15 +110,13 @@
             <p style="font-size: 0.8em; color: #FF00FF; margin-top: 30px;">(Click to Start)</p>
         </div>
 
+        <!-- Game Over Screen (Now the universal retry button) -->
         <div id="message-box">
             <h1>GAME OVER</h1>
             <p class="final-score">Final Score: <span id="final-score-value">0</span></p>
+            <p class="final-score">High Score: <span id="high-score-value">0</span></p>
             <p id="high-score-message"></p>
-            <div class="buttons-container">
-                <button id="retry-button" class="game-button">Retry</button>
-                <button id="submit-button" class="game-button">Submit Score</button>
-                <button id="share-button" class="game-button">Share Score</button>
-            </div>
+            <p id="retry-instruction">TAP ANYWHERE TO RETRY</p>
         </div>
     </div>
 
@@ -155,9 +126,7 @@
         const scoreDisplay = document.getElementById('score-display');
         const messageBox = document.getElementById('message-box');
         const finalScoreValue = document.getElementById('final-score-value');
-        const retryButton = document.getElementById('retry-button');
-        const submitButton = document.getElementById('submit-button');
-        const shareButton = document.getElementById('share-button');
+        const highScoreValue = document.getElementById('high-score-value'); // New element
         const highScoreMessage = document.getElementById('high-score-message');
         const gameContainer = document.getElementById('game-container');
         const startScreen = document.getElementById('start-screen');
@@ -174,15 +143,6 @@
         let animationFrameId;
         let gameRunning = false;
         
-        // --- TELEGRAM CONTEXT ---
-        function getTelegramUserId() {
-            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
-                return window.Telegram.WebApp.initDataUnsafe.user.id;
-            }
-            return null;
-        }
-
-
         // --- GAME OBJECTS ---
         class Player {
             constructor() {
@@ -247,8 +207,6 @@
                 this.x -= pipeSpeed;
             }
             draw() {
-                // Black Hole Anomalies (drawn as dark circles with a glow)
-                
                 ctx.shadowColor = '#FF00FF';
                 ctx.shadowBlur = 10;
                 
@@ -359,11 +317,14 @@
             finalScoreValue.textContent = score;
             
             const currentHighScore = localStorage.getItem('telegramFlyerHighScore') || 0;
+            highScoreValue.textContent = currentHighScore; 
+
             if (score > currentHighScore) {
                 localStorage.setItem('telegramFlyerHighScore', score);
-                highScoreMessage.textContent = `NEW RECORD! Previous Best: ${currentHighScore}`;
+                highScoreValue.textContent = score; 
+                highScoreMessage.textContent = `NEW RECORD!`;
             } else {
-                highScoreMessage.textContent = `High Score: ${currentHighScore}`;
+                highScoreMessage.textContent = `Good job!`;
             }
 
             messageBox.classList.add('active');
@@ -401,55 +362,13 @@
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
-        // --- BUTTON HANDLERS (TELEGRAM INTERACTION) ---
-
-        function submitScore() {
-            if (typeof TelegramGameProxy !== 'undefined') {
-                const userId = getTelegramUserId();
-                
-                // The third parameter is 'force' (optional, boolean), which forces the update even if the score is lower.
-                // We use the optional userId parameter (fourth argument) for max compatibility.
-                // The 'edit_message' parameter (true) updates the original game message.
-                TelegramGameProxy.setScore(score, true, null, userId); 
-                
-                submitButton.textContent = 'Submitted!';
-                submitButton.disabled = true;
-            } else {
-                alert('Telegram Game Proxy not available. Cannot submit score.');
-            }
-        }
-
-        function shareGame() {
-            if (typeof TelegramGameProxy !== 'undefined') {
-                // shareScore optionally takes a score. We pass the final score.
-                TelegramGameProxy.shareScore(score);
-
-                shareButton.textContent = 'Sharing...';
-                shareButton.disabled = true;
-                setTimeout(() => {
-                    shareButton.textContent = 'Share Score';
-                    shareButton.disabled = false;
-                }, 2000);
-            } else {
-                alert('Telegram Game Proxy not available. Cannot share game.');
-            }
-        }
-        
         // --- EVENT LISTENERS ---
         
         function setupEventListeners() {
+            // Universal click handlers for jump/start/retry
             gameContainer.addEventListener('click', jump);
             startScreen.addEventListener('click', jump);
-
-            // Re-attach listeners to the specific buttons
-            retryButton.addEventListener('click', () => {
-                messageBox.classList.remove('active');
-                submitButton.textContent = 'Submit Score';
-                submitButton.disabled = false;
-                initGame();
-            });
-            submitButton.addEventListener('click', submitScore);
-            shareButton.addEventListener('click', shareGame);
+            messageBox.addEventListener('click', jump);
         }
         
         // Resize handler
@@ -469,7 +388,7 @@
             setupEventListeners();
         };
 
-        // Initialize the game when the window is loaded (starts setup, not the game loop)
+        // Initialize the game when the window is loaded to set canvas dimensions
     </script>
 </body>
 </html>
