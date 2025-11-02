@@ -68,7 +68,6 @@ async def set_game_url_command(update: Update, context: ContextTypes.DEFAULT_TYP
     """TEMPORARY DEBUG COMMAND: Forces the game URL update via API call with enhanced error reporting."""
     try:
         # The set_game_short_name method updates the URL property for the game.
-        # Note: This is now a critical test. If this fails, the error message holds the key.
         success = await context.bot.set_game_short_name(
             game_short_name=GAME_SHORT_NAME,
             url=HOSTED_GAME_URL
@@ -101,3 +100,53 @@ async def set_game_score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Handles the high score submission from the game (Telegram API handles the update)."""
     if update.callback_query and update.callback_query.game_short_name == GAME_SHORT_NAME:
         query = update.callback_query
+        # Answer the query with the game URL to launch it
+        await query.answer(url=HOSTED_GAME_URL)
+    elif update.callback_query:
+        # If it's a non-game button, just acknowledge the press
+        await update.callback_query.answer()
+
+def run_app_setup(application: Application) -> None:
+    """Configures all handlers for the application."""
+    # 1. Command handler for /start
+    application.add_handler(CommandHandler("start", start_command))
+    
+    # 2. TEMPORARY DEBUG COMMAND
+    application.add_handler(CommandHandler("setgameurl", set_game_url_command))
+
+    # 3. Callback handler for the inline game button press
+    application.add_handler(CallbackQueryHandler(button_callback, pattern='^' + GAME_SHORT_NAME + '$'))
+    
+    # 4. Inline Query Handler
+    application.add_handler(InlineQueryHandler(inline_query_handler))
+    
+    # 5. Handler for unhandled text (must be after all command handlers)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
+    
+    # 6. Fallback callback handler for score updates
+    application.add_handler(CallbackQueryHandler(set_game_score))
+
+
+# THIS FUNCTION'S NAME IS THE FINAL FIX (was run_app)
+def main() -> None:
+    """Runs the application with webhook or polling. Used by Gunicorn."""
+    run_app_setup(application) # Configure handlers
+
+    # --- DEPLOYMENT MODE (WEBHOOK) ---
+    if WEBHOOK_URL:
+        logger.info(f"Starting bot with Webhook at {WEBHOOK_URL} on port {PORT}")
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=BOT_TOKEN,  # Use the token as a unique path
+            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+            secret_token=BOT_TOKEN 
+        )
+    # --- LOCAL TESTING MODE (POLLING) ---
+    else:
+        logger.warning("WEBHOOK_URL not set. Running in local polling mode.")
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == "__main__":
+    # If run locally (e.g., python gameback.py), it calls the main function
+    main()
