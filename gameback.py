@@ -1,8 +1,9 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardMarkup, InlineQueryResultGame, Bot
+from telegram import Update, InlineKeyboardMarkup, InlineQueryResultGame
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
-from telegram.ext import ContextTypes, InlineQueryHandler, ExtBot
+from telegram.ext import ContextTypes, InlineQueryHandler
+from telegram.error import TelegramError
 
 # --- CONFIGURATION (FINALIZED WITH YOUR VALUES) ---
 # 1. Your API Token
@@ -64,7 +65,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.inline_query.answer(results, cache_time=5)
 
 async def set_game_url_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """TEMPORARY DEBUG COMMAND: Forces the game URL update via API call."""
+    """TEMPORARY DEBUG COMMAND: Forces the game URL update via API call with enhanced error reporting."""
     try:
         # The set_game_short_name method updates the URL property for the game.
         success = await context.bot.set_game_short_name(
@@ -73,15 +74,20 @@ async def set_game_url_command(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         
         if success:
-            message = f"✅ Game URL updated successfully! URL: {HOSTED_GAME_URL}"
+            message = f"✅ API SUCCESS: Game URL updated successfully! URL: {HOSTED_GAME_URL}"
         else:
-            # Telegram API returns False on failure
-            message = "❌ Failed to update Game URL. Check BotFather settings and game name."
+            # Telegram API returns False on failure (though often it raises an error)
+            message = "❌ API FAILURE: Telegram API returned False. Check BotFather settings."
+
+    except TelegramError as e:
+        # Catch specific Telegram API errors (e.g., "Game not found")
+        message = f"❌ API ERROR: Telegram rejected the request. Reason: {e}"
+        logger.error(f"Telegram API Error in /setgameurl: {e}")
 
     except Exception as e:
-        # Catch any network or API call errors
-        message = f"❌ Error communicating with Telegram API: {e}"
-        logger.error(f"Error in /setgameurl: {e}")
+        # Catch any other unexpected errors
+        message = f"❌ UNEXPECTED ERROR: Failed to run command. Reason: {e}"
+        logger.error(f"Unexpected error in /setgameurl: {e}")
 
     await update.message.reply_text(message)
 
