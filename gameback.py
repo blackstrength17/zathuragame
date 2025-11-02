@@ -1,8 +1,9 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from telegram.ext import MessageHandler, filters
+from telegram import Update, InlineKeyboardMarkup, InlineQueryResultGame
+from telegram import InlineKeyboardButton, WebAppInfo
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.ext import ContextTypes, InlineQueryHandler
 
 # --- CONFIGURATION (FINALIZED WITH YOUR VALUES) ---
 # 1. Your API Token
@@ -26,15 +27,14 @@ logger = logging.getLogger(__name__)
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message with a button that launches the game."""
-    # Ensure the button's game short name matches the one registered with BotFather
     keyboard = InlineKeyboardMarkup.from_button(
         InlineKeyboardButton(
-            text="🎮 Play Telegram Flyer",
+            text="🎮 Play Zathura Flyer",
             game=GAME_SHORT_NAME,
         )
     )
     await update.message.reply_text(
-        "Welcome to the Telegram Flyer Game! Click the button below to start flying. Good luck!",
+        "Welcome to the Zathura Flyer Game! Click the button below to start flying. Good luck!",
         reply_markup=keyboard,
     )
 
@@ -42,16 +42,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Handles the callback when the user presses the inline button to start the game."""
     query = update.callback_query
     
-    # We use answer with the URL to open the Web App (the HTML5 game).
     if query.game_short_name == GAME_SHORT_NAME:
         await query.answer(url=HOSTED_GAME_URL)
     else:
-        # A general button callback, just answer the query
         await query.answer()
+
+async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles inline queries to suggest the game."""
+    query = update.inline_query.query
+    results = [
+        InlineQueryResultGame(
+            id="1", 
+            game_short_name=GAME_SHORT_NAME,
+        )
+    ]
+    
+    await update.inline_query.answer(results, cache_time=5)
 
 async def set_game_score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the high score submission from the game (Telegram API handles the update)."""
-    # This function is primarily for catching the button press.
     if update.callback_query and update.callback_query.game_short_name == GAME_SHORT_NAME:
         query = update.callback_query
         # Answer the query with the game URL to launch it
@@ -66,7 +75,6 @@ def run_bot() -> None:
         logger.error("BOT_TOKEN is not set. Cannot run the bot.")
         return
 
-    # Create the Application and pass it your bot's token.
     application = Application.builder().token(BOT_TOKEN).build()
 
     # 1. Command handler for /start
@@ -75,13 +83,15 @@ def run_bot() -> None:
     # 2. Callback handler for the inline game button press
     application.add_handler(CallbackQueryHandler(button_callback, pattern='^' + GAME_SHORT_NAME + '$'))
     
-    # 3. Fallback callback handler for score updates (which also catches the button press)
+    # 3. Inline Query Handler
+    application.add_handler(InlineQueryHandler(inline_query_handler))
+    
+    # 4. Fallback callback handler for score updates
     application.add_handler(CallbackQueryHandler(set_game_score))
 
     # --- DEPLOYMENT MODE (WEBHOOK) ---
     if WEBHOOK_URL:
         logger.info(f"Starting bot with Webhook at {WEBHOOK_URL} on port {PORT}")
-        # Run webhook on all interfaces, listening on the port provided by the environment
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
