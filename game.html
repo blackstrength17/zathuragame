@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Flyer</title>
+    <title>Zathura Flyer</title>
     <style>
         body {
             display: flex;
@@ -12,11 +12,11 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #000;
+            background-color: #0a0a1a; /* Deep Space Nebula Background */
             font-family: 'Arial', sans-serif;
-            color: #fff;
+            color: #E0E0E0;
             overflow: hidden;
-            touch-action: manipulation; /* Prevent scrolling on touch devices */
+            touch-action: manipulation;
         }
         #game-container {
             position: relative;
@@ -25,26 +25,28 @@
             height: 80vh;
             max-height: 600px;
             overflow: hidden;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-            border-radius: 10px;
-            border: 5px solid #0ff;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5); /* Cyan glow */
+            border-radius: 15px;
+            border: 3px solid #00FFFF;
+            background: radial-gradient(circle at center, #1a1a3a 0%, #0a0a1a 100%);
         }
         canvas {
             display: block;
             width: 100%;
             height: 100%;
-            background-color: #333;
+            background-color: transparent;
         }
         #score-display {
             position: absolute;
-            top: 10px;
+            top: 15px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 3em;
-            font-weight: bold;
-            color: #0ff;
-            text-shadow: 0 0 10px #0ff;
+            font-size: 3.5em;
+            font-weight: 900;
+            color: #00FFFF;
+            text-shadow: 0 0 15px #00FFFF;
             z-index: 100;
+            user-select: none;
         }
         #message-box {
             position: absolute;
@@ -52,7 +54,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -61,16 +63,23 @@
             text-align: center;
             opacity: 0;
             visibility: hidden;
-            transition: opacity 0.3s;
+            transition: opacity 0.5s;
+            border-radius: 15px;
         }
         #message-box.active {
             opacity: 1;
             visibility: visible;
         }
+        h1 {
+            color: #FF00FF; /* Magenta */
+            text-shadow: 0 0 10px #FF00FF;
+            font-size: 3em;
+            margin-bottom: 5px;
+        }
         .final-score {
-            font-size: 2.5em;
-            color: #0ff;
-            margin-bottom: 15px;
+            font-size: 2em;
+            color: #00FFFF;
+            margin-bottom: 20px;
         }
         .buttons-container {
             display: flex;
@@ -80,30 +89,36 @@
         .game-button {
             padding: 12px 25px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             font-size: 1em;
             font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-            box-shadow: 0 4px #005a5a;
+            transition: all 0.2s;
+            box-shadow: 0 5px 0 #333333;
+            text-transform: uppercase;
+        }
+        .game-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 0 #333333;
         }
         .game-button:active {
-            transform: translateY(2px);
-            box-shadow: 0 2px #005a5a;
+            transform: translateY(3px);
+            box-shadow: 0 2px 0 #333333;
         }
         #retry-button {
-            background-color: #00bcd4;
-            color: white;
+            background: linear-gradient(145deg, #00FFFF, #00BFFF);
+            color: #1a1a3a;
+            box-shadow: 0 5px 0 #008888;
         }
         #submit-button {
-            background-color: #4CAF50;
+            background: linear-gradient(145deg, #4CAF50, #2E8B57);
             color: white;
-            box-shadow: 0 4px #008f39;
+            box-shadow: 0 5px 0 #2E6B39;
         }
         #share-button {
-            background-color: #FF9800;
-            color: white;
-            box-shadow: 0 4px #c67c00;
+            background: linear-gradient(145deg, #FF9800, #FF7F50);
+            color: #1a1a3a;
+            box-shadow: 0 5px 0 #C67C00;
         }
     </style>
     <!-- Telegram Game SDK -->
@@ -113,9 +128,18 @@
     <div id="game-container" onclick="jump()">
         <canvas id="gameCanvas"></canvas>
         <div id="score-display">0</div>
+
+        <!-- Start/Instruction Screen -->
+        <div id="start-screen" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 300; cursor: pointer;">
+            <h1 style="font-size: 2.5em; margin-bottom: 20px;">🚀 ZATHURA FLYER</h1>
+            <p style="font-size: 1.2em; color: #00FFFF;">TAP ANYWHERE TO THRUST</p>
+            <p style="font-size: 1em; color: #E0E0E0; margin-top: 10px;">AVOID THE BLACK HOLE ANOMALIES</p>
+            <p style="font-size: 0.8em; color: #FF00FF; margin-top: 30px;">(Click to Start)</p>
+        </div>
+
         <div id="message-box">
             <h1>GAME OVER</h1>
-            <p class="final-score">Your Score: <span id="final-score-value">0</span></p>
+            <p class="final-score">Final Score: <span id="final-score-value">0</span></p>
             <p id="high-score-message"></p>
             <div class="buttons-container">
                 <button id="retry-button" class="game-button">Retry</button>
@@ -135,43 +159,19 @@
         const submitButton = document.getElementById('submit-button');
         const shareButton = document.getElementById('share-button');
         const highScoreMessage = document.getElementById('high-score-message');
-        
+        const startScreen = document.getElementById('start-screen');
+
         // --- GAME VARIABLES ---
-        let player, pipes, score, gameLoopInterval, isGameOver;
-        let gravity = 0.5;
-        let lift = -10;
+        let player, pipes, score, isGameOver;
+        let gravity = 0.55;
+        let lift = -9;
         let pipeWidth = 50;
-        let pipeGap = 150;
-        let pipeSpeed = 2;
-        let pipeInterval = 2000;
+        let pipeGap = 160;
+        let pipeSpeed = 2.5;
+        let pipeInterval = 1800;
         let lastPipeTime = 0;
         let animationFrameId;
-
-        // --- TELEGRAM CONTEXT VARIABLES (FIXED FOR SCORE SUBMISSION) ---
-        let telegramParams = {};
-        
-        // Function to parse the fragment/query parameters
-        function parseTelegramParams() {
-            // Check Telegram WebApp environment first
-            if (window.Telegram && window.Telegram.WebApp) {
-                // For a WebApp, parameters might be in the query string or initData (if using a mini-app flow)
-                const urlParams = new URLSearchParams(window.location.search);
-                telegramParams.tgWebAppStartParam = urlParams.get('tgWebAppStartParam');
-                // The crucial info (user_id, chat_instance, etc.) is typically NOT directly accessible here, 
-                // but TelegramGameProxy handles message/chat context internally based on the launch.
-            }
-
-            // Fallback: This is the structure Telegram uses when launching games via answerCallbackQuery
-            const urlFragment = window.location.hash.substring(1);
-            const fragmentParams = new URLSearchParams(urlFragment);
-
-            // Telegram sometimes passes the user_id or similar tokens in the fragment.
-            // We specifically look for the query string to reconstruct the initial launch context if needed,
-            // but the TelegramGameProxy is designed to handle the context internally based on the launch origin.
-            
-            // The essential part: We simply need to load the telegram-web-app.js script (which we do in HTML)
-            // and trust that the global TelegramGameProxy object is available and populated.
-        }
+        let gameRunning = false;
 
         // --- GAME OBJECTS ---
         class Player {
@@ -179,28 +179,48 @@
                 this.x = canvas.width / 4;
                 this.y = canvas.height / 2;
                 this.width = 30;
-                this.height = 30;
+                this.height = 18;
                 this.velocity = 0;
-                this.color = '#ff0';
+                this.color = '#fff';
             }
             update() {
                 this.velocity += gravity;
                 this.y += this.velocity;
+                this.y = Math.max(0, Math.min(this.y, canvas.height - this.height));
 
-                // Keep player within bounds
-                if (this.y + this.height > canvas.height) {
-                    this.y = canvas.height - this.height;
-                    this.velocity = 0;
+                if (this.y + this.height >= canvas.height) {
                     endGame();
-                }
-                if (this.y < 0) {
-                    this.y = 0;
-                    this.velocity = 0;
                 }
             }
             draw() {
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                
+                // Rotation based on velocity for slight tilt
+                let angle = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, this.velocity * 0.05));
+                ctx.rotate(angle);
+                
+                // Draw Spaceship Body (White/Grey)
+                ctx.fillStyle = '#C0C0C0';
+                ctx.beginPath();
+                ctx.moveTo(-15, 0); // Nose
+                ctx.lineTo(15, -9); // Top wing
+                ctx.lineTo(15, 9); // Bottom wing
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw Thruster (Orange/Red)
+                if (this.velocity > -5) { // Only show thruster when player is not actively tapping up
+                    ctx.fillStyle = '#FFA500'; // Orange
+                    ctx.beginPath();
+                    ctx.moveTo(15, -4);
+                    ctx.lineTo(25, 0);
+                    ctx.lineTo(15, 4);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                ctx.restore();
             }
         }
 
@@ -209,20 +229,31 @@
                 this.x = canvas.width;
                 this.width = pipeWidth;
                 this.gap = pipeGap;
-                this.gapY = gapY; // Y position of the center of the gap
+                this.gapY = gapY;
                 this.scored = false;
-                this.color = '#0c0';
+                this.color = '#333';
+                this.radius = pipeWidth / 2;
             }
             update() {
                 this.x -= pipeSpeed;
             }
             draw() {
-                // Top pipe
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x, 0, this.width, this.gapY - this.gap / 2);
+                // Black Hole Anomalies (drawn as dark circles with a glow)
                 
-                // Bottom pipe
-                ctx.fillRect(this.x, this.gapY + this.gap / 2, this.width, canvas.height - (this.gapY + this.gap / 2));
+                // Top Anomaly (centered on the line)
+                ctx.fillStyle = '#000000';
+                ctx.shadowColor = '#FF00FF';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(this.x + this.radius, this.gapY - this.gap / 2, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bottom Anomaly (centered on the line)
+                ctx.beginPath();
+                ctx.arc(this.x + this.radius, this.gapY + this.gap / 2, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0; // Reset shadow
             }
         }
 
@@ -240,13 +271,13 @@
             pipes = [];
             score = 0;
             isGameOver = false;
+            gameRunning = true;
             scoreDisplay.textContent = score;
             messageBox.classList.remove('active');
+            startScreen.style.display = 'none';
             
-            // Clear the canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            parseTelegramParams();
             gameLoop();
         }
         
@@ -255,38 +286,56 @@
                 initGame();
                 return;
             }
+            if (!gameRunning) {
+                initGame();
+                return;
+            }
             player.velocity = lift;
         }
-
+        
+        startScreen.addEventListener('click', initGame);
+        
         function spawnPipe() {
-            // Random Y center for the gap (avoiding edges)
             const gapY = Math.random() * (canvas.height - 2 * pipeGap) + pipeGap;
             pipes.push(new Pipe(gapY));
         }
 
         function checkCollision() {
+            const playerCenterY = player.y + player.height / 2;
+            const playerCenterX = player.x + player.width / 2;
+
             for (let i = 0; i < pipes.length; i++) {
                 const p = pipes[i];
-
-                // Check for collision with player (AABB check)
+                const pipeCenter = p.x + p.width / 2;
+                
+                // Check X overlap
                 if (
                     player.x < p.x + p.width &&
                     player.x + player.width > p.x
                 ) {
-                    // Check collision with top pipe
-                    if (player.y < p.gapY - p.gap / 2) {
+                    // Check collision with top circle
+                    const topAnomalyY = p.gapY - p.gap / 2;
+                    const dxT = playerCenterX - pipeCenter;
+                    const dyT = playerCenterY - topAnomalyY;
+                    const distT = Math.sqrt(dxT * dxT + dyT * dyT);
+                    if (distT < p.radius + player.width / 2) {
                         endGame();
                         return true;
                     }
-                    // Check collision with bottom pipe
-                    if (player.y + player.height > p.gapY + p.gap / 2) {
+
+                    // Check collision with bottom circle
+                    const bottomAnomalyY = p.gapY + p.gap / 2;
+                    const dxB = playerCenterX - pipeCenter;
+                    const dyB = playerCenterY - bottomAnomalyY;
+                    const distB = Math.sqrt(dxB * dxB + dyB * dyB);
+                    if (distB < p.radius + player.width / 2) {
                         endGame();
                         return true;
                     }
                 }
 
                 // Check for scoring
-                if (p.x + p.width < player.x && !p.scored) {
+                if (pipeCenter < player.x && !p.scored) {
                     score++;
                     scoreDisplay.textContent = score;
                     p.scored = true;
@@ -298,15 +347,15 @@
         function endGame() {
             if (isGameOver) return;
             isGameOver = true;
+            gameRunning = false;
             cancelAnimationFrame(animationFrameId);
             
             finalScoreValue.textContent = score;
             
-            // Simple high score logic (client-side only for display)
             const currentHighScore = localStorage.getItem('telegramFlyerHighScore') || 0;
             if (score > currentHighScore) {
                 localStorage.setItem('telegramFlyerHighScore', score);
-                highScoreMessage.textContent = `New High Score! Previous: ${currentHighScore}`;
+                highScoreMessage.textContent = `NEW RECORD! Previous Best: ${currentHighScore}`;
             } else {
                 highScoreMessage.textContent = `High Score: ${currentHighScore}`;
             }
@@ -315,7 +364,9 @@
         }
 
         function gameLoop(timestamp) {
-            if (isGameOver) return;
+            if (isGameOver || !gameRunning) return;
+
+            if (!lastPipeTime) lastPipeTime = timestamp;
 
             // Spawning logic
             if (timestamp - lastPipeTime > pipeInterval) {
@@ -325,7 +376,7 @@
 
             // Drawing and Updates
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#111';
+            ctx.fillStyle = '#0a0a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             player.update();
@@ -348,34 +399,24 @@
 
         // --- BUTTON HANDLERS (TELEGRAM INTERACTION) ---
 
-        // Submits the score to the Telegram API
         function submitScore() {
             if (typeof TelegramGameProxy !== 'undefined') {
-                // Pass the current score. The 'edit_message' parameter (true) updates the original game message.
-                // The API call is blocked if the user/message context isn't available from the launch.
+                // Pass the current score. 'true' tells Telegram to update the original message.
+                // TelegramGameProxy automatically uses the context (chat_id, message_id) from the launch.
                 TelegramGameProxy.setScore(score, true);
                 
-                // Optional: Provide visual feedback
                 submitButton.textContent = 'Submitted!';
                 submitButton.disabled = true;
-                setTimeout(() => {
-                    submitButton.textContent = 'Submit Score';
-                    submitButton.disabled = false;
-                }, 2000);
-
             } else {
                 alert('Telegram Game Proxy not available. Cannot submit score.');
             }
         }
 
-        // Opens the Telegram share dialog
         function shareGame() {
             if (typeof TelegramGameProxy !== 'undefined') {
-                // Share the score and prompt the user to choose a chat to send the game to.
-                // The score is automatically included in the share message.
+                // Share the score. The score is automatically embedded in the share message.
                 TelegramGameProxy.shareScore(score);
 
-                // Optional: Provide visual feedback
                 shareButton.textContent = 'Sharing...';
                 shareButton.disabled = true;
                 setTimeout(() => {
@@ -388,12 +429,34 @@
         }
         
         // --- EVENT LISTENERS ---
-        retryButton.addEventListener('click', initGame);
+        retryButton.addEventListener('click', () => {
+            messageBox.classList.remove('active');
+            submitButton.textContent = 'Submit Score';
+            submitButton.disabled = false;
+            initGame();
+        });
         submitButton.addEventListener('click', submitScore);
         shareButton.addEventListener('click', shareGame);
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            if (!gameRunning && !isGameOver) {
+                // Redraw the start screen state
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        });
         
-        // Start the game on load
-        window.onload = initGame;
+        // Initial setup to draw the start screen correctly on load
+        window.onload = () => {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            startScreen.style.display = 'flex';
+        };
+
+        // Initialize the game when the window is loaded to set canvas dimensions
+        // The actual game loop starts only after the user taps the start screen.
     </script>
 </body>
 </html>
