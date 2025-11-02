@@ -1,0 +1,1 @@
+web: gunicorn telegram_game_bot:main --bind 0.0.0.0:$PORT
