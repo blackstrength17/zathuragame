@@ -10,7 +10,7 @@ from telegram.error import TelegramError
 BOT_TOKEN = "8574405914:AAHkq1xhlQZvf3dAZ36QIzK2PmSHCQ_ZTIA"
 # 2. Your Game Short Name (Used for internal commands and buttons)
 GAME_SHORT_NAME = "ZathuraGame"
-# 3. Your Game TITLE (Used for the API fix)
+# 3. Your Game TITLE (Used for the API fix attempt)
 GAME_TITLE = "Flappy Zathura"
 # 4. Your hosted game URL from Vercel
 HOSTED_GAME_URL = "https://zathuragame1.vercel.app/game.html"
@@ -48,8 +48,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     
     if query.game_short_name == GAME_SHORT_NAME:
+        # This opens the game URL when the main "Play" button is pressed
         await query.answer(url=HOSTED_GAME_URL)
     else:
+        # A general callback (e.g., if a retry button were a separate inline button)
         await query.answer()
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -67,11 +69,11 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.inline_query.answer(results, cache_time=5)
 
 async def set_game_url_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """TEMPORARY DEBUG COMMAND: Forces the game URL update via API call using the GAME_TITLE."""
+    """TEMPORARY DEBUG COMMAND: Forces the game URL update via API call."""
     try:
-        # CRITICAL FIX: Use the game TITLE (or an identifier Telegram accepts) instead of the short name.
+        # Using the Game Title as the identifier for the API call (as a final fix attempt)
         success = await context.bot.set_game_short_name(
-            game_short_name=GAME_TITLE, # Using the Title here as the identifier
+            game_short_name=GAME_TITLE, 
             url=HOSTED_GAME_URL
         )
         
@@ -81,7 +83,6 @@ async def set_game_url_command(update: Update, context: ContextTypes.DEFAULT_TYP
             message = "❌ API FAILURE: Telegram API returned False. Check BotFather settings."
 
     except TelegramError as e:
-        # Catch specific Telegram API errors (This is the error message we need!)
         message = f"❌ API ERROR: Telegram rejected the request. Reason: {e.message}"
         logger.error(f"Telegram API Error in /setgameurl: {e.message}")
 
@@ -98,9 +99,10 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def set_game_score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the high score submission from the game (Telegram API handles the update)."""
+    # The setScore is sent from the HTML game's JavaScript (TelegramGameProxy.setScore)
+    # The bot handles the resultant API update, but the score submission itself is client-side.
     if update.callback_query and update.callback_query.game_short_name == GAME_SHORT_NAME:
-        query = update.callback_query
-        await query.answer(url=HOSTED_GAME_URL)
+        await update.callback_query.answer(url=HOSTED_GAME_URL)
     elif update.callback_query:
         await update.callback_query.answer()
 
