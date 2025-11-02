@@ -3,394 +3,397 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Flyer Game</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Telegram Flyer</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f0f8ff; /* Light sky blue background */
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            min-height: 100vh;
+            justify-content: center;
+            height: 100vh;
             margin: 0;
-            overflow: hidden; /* Prevent scrolling */
-            touch-action: manipulation; /* Important for preventing double-tap zoom on mobile */
+            background-color: #000;
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+            overflow: hidden;
+            touch-action: manipulation; /* Prevent scrolling on touch devices */
         }
         #game-container {
-            width: 100%;
-            max-width: 450px; /* Max width suitable for a phone screen */
-            aspect-ratio: 9 / 16; /* Portrait orientation */
-            background: linear-gradient(180deg, #87CEEB 0%, #B0E0E6 100%); /* Sky gradient */
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            border-radius: 1rem;
-            overflow: hidden;
             position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 80vh;
+            max-height: 600px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            border-radius: 10px;
+            border: 5px solid #0ff;
         }
         canvas {
             display: block;
             width: 100%;
             height: 100%;
-            cursor: pointer;
+            background-color: #333;
+        }
+        #score-display {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 3em;
+            font-weight: bold;
+            color: #0ff;
+            text-shadow: 0 0 10px #0ff;
+            z-index: 100;
         }
         #message-box {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(255, 255, 255, 0.95);
-            padding: 2rem;
-            border-radius: 1rem;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
             text-align: center;
-            z-index: 10;
             opacity: 0;
-            transition: opacity 0.5s ease;
-            pointer-events: none;
-            width: 80%;
-            max-width: 300px;
+            visibility: hidden;
+            transition: opacity 0.3s;
         }
         #message-box.active {
             opacity: 1;
-            pointer-events: auto;
+            visibility: visible;
         }
-        .btn-primary {
-            background-color: #1e90ff; /* Dodger Blue */
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
+        .final-score {
+            font-size: 2.5em;
+            color: #0ff;
+            margin-bottom: 15px;
+        }
+        .buttons-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .game-button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
             font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.2s;
-            box-shadow: 0 4px #1c6aa5;
-            margin-top: 1rem;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px #005a5a;
         }
-        .btn-primary:active {
-            box-shadow: none;
+        .game-button:active {
             transform: translateY(2px);
+            box-shadow: 0 2px #005a5a;
+        }
+        #retry-button {
+            background-color: #00bcd4;
+            color: white;
+        }
+        #submit-button {
+            background-color: #4CAF50;
+            color: white;
+            box-shadow: 0 4px #008f39;
+        }
+        #share-button {
+            background-color: #FF9800;
+            color: white;
+            box-shadow: 0 4px #c67c00;
         }
     </style>
-    <!-- Include Telegram Game SDK for score submission -->
-    <script src="https://telegram.org/js/games.js"></script>
+    <!-- Telegram Game SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-
-<div id="game-container">
-    <canvas id="gameCanvas"></canvas>
-    
-    <div id="message-box" class="flex flex-col items-center">
-        <h2 id="message-title" class="text-2xl font-bold mb-2 text-gray-800">Welcome!</h2>
-        <p id="message-text" class="text-gray-600 mb-4">Tap to fly, avoid the pipes!</p>
-        <button id="start-button" class="btn-primary" onclick="startGame()">Start Game</button>
-        <div id="final-score-display" class="hidden mt-4">
-            <p class="text-lg font-semibold text-gray-700">Final Score:</p>
-            <p id="final-score-value" class="text-4xl font-extrabold text-indigo-600"></p>
+    <div id="game-container" onclick="jump()">
+        <canvas id="gameCanvas"></canvas>
+        <div id="score-display">0</div>
+        <div id="message-box">
+            <h1>GAME OVER</h1>
+            <p class="final-score">Your Score: <span id="final-score-value">0</span></p>
+            <p id="high-score-message"></p>
+            <div class="buttons-container">
+                <button id="retry-button" class="game-button">Retry</button>
+                <button id="submit-button" class="game-button">Submit Score</button>
+                <button id="share-button" class="game-button">Share Score</button>
+            </div>
         </div>
-        <button id="submit-button" class="btn-primary hidden" onclick="submitScore()">Submit Score & Share</button>
     </div>
-</div>
 
-<script>
-    // --- Configuration ---
-    const GAME_SPEED = 2; // Speed of pipe movement
-    const JUMP_VELOCITY = -5; // Upward velocity on tap
-    const GRAVITY = 0.25; // Downward acceleration
-    const PIPE_GAP = 120; // Vertical gap size between pipes
-    const PIPE_WIDTH = 50;
-    const PIPE_INTERVAL = 150; // Horizontal distance between pipes
-
-    // --- Game State ---
-    let canvas, ctx;
-    let flyer;
-    let pipes = [];
-    let score = 0;
-    let gameLoopInterval;
-    let pipeSpawnCounter = 0;
-    let gameState = 'waiting'; // 'waiting', 'playing', 'over'
-
-    // --- HTML Elements ---
-    const messageBox = document.getElementById('message-box');
-    const messageTitle = document.getElementById('message-title');
-    const messageText = document.getElementById('message-text');
-    const startButton = document.getElementById('start-button');
-    const finalScoreDisplay = document.getElementById('final-score-display');
-    const finalScoreValue = document.getElementById('final-score-value');
-    const submitButton = document.getElementById('submit-button');
-
-    // --- Initialization ---
-    window.onload = function() {
-        canvas = document.getElementById('gameCanvas');
-        ctx = canvas.getContext('2d');
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const messageBox = document.getElementById('message-box');
+        const finalScoreValue = document.getElementById('final-score-value');
+        const retryButton = document.getElementById('retry-button');
+        const submitButton = document.getElementById('submit-button');
+        const shareButton = document.getElementById('share-button');
+        const highScoreMessage = document.getElementById('high-score-message');
         
-        // Handle screen resizing
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
+        // --- GAME VARIABLES ---
+        let player, pipes, score, gameLoopInterval, isGameOver;
+        let gravity = 0.5;
+        let lift = -10;
+        let pipeWidth = 50;
+        let pipeGap = 150;
+        let pipeSpeed = 2;
+        let pipeInterval = 2000;
+        let lastPipeTime = 0;
+        let animationFrameId;
 
-        // Initial setup
-        resetGame();
-        draw();
+        // --- TELEGRAM CONTEXT VARIABLES (FIXED FOR SCORE SUBMISSION) ---
+        let telegramParams = {};
         
-        // Setup input listeners for jumping
-        canvas.addEventListener('click', handleInput);
-        canvas.addEventListener('touchstart', handleInput);
-        
-        showStartScreen();
-    };
-
-    function resizeCanvas() {
-        // Set canvas dimensions based on container size
-        const container = document.getElementById('game-container');
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        
-        // Redraw immediately after resize to prevent blank screen
-        if (gameState === 'playing' || gameState === 'over') {
-            draw();
-        }
-    }
-
-    // --- Game Objects ---
-    function Flyer() {
-        this.x = canvas.width / 4;
-        this.y = canvas.height / 2;
-        this.radius = 15;
-        this.velocity = 0;
-
-        this.draw = function() {
-            ctx.fillStyle = '#FFD700'; // Gold/Yellow
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.fill();
-        };
-
-        this.update = function() {
-            this.velocity += GRAVITY;
-            this.y += this.velocity;
-
-            // Keep velocity reasonable
-            if (this.velocity > 8) this.velocity = 8;
-
-            // Check boundary collision (top/bottom)
-            if (this.y + this.radius > canvas.height) {
-                this.y = canvas.height - this.radius;
-                endGame();
+        // Function to parse the fragment/query parameters
+        function parseTelegramParams() {
+            // Check Telegram WebApp environment first
+            if (window.Telegram && window.Telegram.WebApp) {
+                // For a WebApp, parameters might be in the query string or initData (if using a mini-app flow)
+                const urlParams = new URLSearchParams(window.location.search);
+                telegramParams.tgWebAppStartParam = urlParams.get('tgWebAppStartParam');
+                // The crucial info (user_id, chat_instance, etc.) is typically NOT directly accessible here, 
+                // but TelegramGameProxy handles message/chat context internally based on the launch.
             }
-            if (this.y - this.radius < 0) {
-                this.y = this.radius;
-                this.velocity = 0;
-            }
-        };
 
-        this.jump = function() {
-            this.velocity = JUMP_VELOCITY;
-        };
-    }
+            // Fallback: This is the structure Telegram uses when launching games via answerCallbackQuery
+            const urlFragment = window.location.hash.substring(1);
+            const fragmentParams = new URLSearchParams(urlFragment);
 
-    function Pipe(x, yGapCenter) {
-        this.x = x;
-        this.yTop = yGapCenter - PIPE_GAP / 2;
-        this.yBottom = yGapCenter + PIPE_GAP / 2;
-        this.width = PIPE_WIDTH;
-
-        this.draw = function() {
-            ctx.fillStyle = '#228B22'; // Forest Green
-
-            // Top pipe
-            ctx.fillRect(this.x, 0, this.width, this.yTop);
+            // Telegram sometimes passes the user_id or similar tokens in the fragment.
+            // We specifically look for the query string to reconstruct the initial launch context if needed,
+            // but the TelegramGameProxy is designed to handle the context internally based on the launch origin.
             
-            // Bottom pipe
-            ctx.fillRect(this.x, this.yBottom, this.width, canvas.height - this.yBottom);
-        };
+            // The essential part: We simply need to load the telegram-web-app.js script (which we do in HTML)
+            // and trust that the global TelegramGameProxy object is available and populated.
+        }
 
-        this.update = function() {
-            this.x -= GAME_SPEED;
-        };
+        // --- GAME OBJECTS ---
+        class Player {
+            constructor() {
+                this.x = canvas.width / 4;
+                this.y = canvas.height / 2;
+                this.width = 30;
+                this.height = 30;
+                this.velocity = 0;
+                this.color = '#ff0';
+            }
+            update() {
+                this.velocity += gravity;
+                this.y += this.velocity;
 
-        this.collidesWith = function(flyer) {
-            // Check horizontal overlap
-            if (flyer.x + flyer.radius > this.x && flyer.x - flyer.radius < this.x + this.width) {
-                // Check vertical collision with top pipe
-                if (flyer.y - flyer.radius < this.yTop) {
-                    return true;
+                // Keep player within bounds
+                if (this.y + this.height > canvas.height) {
+                    this.y = canvas.height - this.height;
+                    this.velocity = 0;
+                    endGame();
                 }
-                // Check vertical collision with bottom pipe
-                if (flyer.y + flyer.radius > this.yBottom) {
-                    return true;
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.velocity = 0;
+                }
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        class Pipe {
+            constructor(gapY) {
+                this.x = canvas.width;
+                this.width = pipeWidth;
+                this.gap = pipeGap;
+                this.gapY = gapY; // Y position of the center of the gap
+                this.scored = false;
+                this.color = '#0c0';
+            }
+            update() {
+                this.x -= pipeSpeed;
+            }
+            draw() {
+                // Top pipe
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, 0, this.width, this.gapY - this.gap / 2);
+                
+                // Bottom pipe
+                ctx.fillRect(this.x, this.gapY + this.gap / 2, this.width, canvas.height - (this.gapY + this.gap / 2));
+            }
+        }
+
+        // --- GAME LOGIC ---
+
+        function initGame() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            
+            player = new Player();
+            pipes = [];
+            score = 0;
+            isGameOver = false;
+            scoreDisplay.textContent = score;
+            messageBox.classList.remove('active');
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            parseTelegramParams();
+            gameLoop();
+        }
+        
+        function jump() {
+            if (isGameOver) {
+                initGame();
+                return;
+            }
+            player.velocity = lift;
+        }
+
+        function spawnPipe() {
+            // Random Y center for the gap (avoiding edges)
+            const gapY = Math.random() * (canvas.height - 2 * pipeGap) + pipeGap;
+            pipes.push(new Pipe(gapY));
+        }
+
+        function checkCollision() {
+            for (let i = 0; i < pipes.length; i++) {
+                const p = pipes[i];
+
+                // Check for collision with player (AABB check)
+                if (
+                    player.x < p.x + p.width &&
+                    player.x + player.width > p.x
+                ) {
+                    // Check collision with top pipe
+                    if (player.y < p.gapY - p.gap / 2) {
+                        endGame();
+                        return true;
+                    }
+                    // Check collision with bottom pipe
+                    if (player.y + player.height > p.gapY + p.gap / 2) {
+                        endGame();
+                        return true;
+                    }
+                }
+
+                // Check for scoring
+                if (p.x + p.width < player.x && !p.scored) {
+                    score++;
+                    scoreDisplay.textContent = score;
+                    p.scored = true;
                 }
             }
             return false;
-        };
-    }
-
-    // --- Game Logic ---
-
-    function resetGame() {
-        flyer = new Flyer();
-        pipes = [];
-        score = 0;
-        pipeSpawnCounter = 0;
-        
-        // Add one starting pipe for immediate challenge
-        spawnPipe(); 
-    }
-
-    function spawnPipe() {
-        const minHeight = 50;
-        const maxHeight = canvas.height - 50;
-        const randomGapCenter = Math.random() * (maxHeight - minHeight * 2) + minHeight + PIPE_GAP / 2;
-        pipes.push(new Pipe(canvas.width, randomGapCenter));
-    }
-
-    function updateGame() {
-        flyer.update();
-
-        pipeSpawnCounter++;
-        if (pipeSpawnCounter > PIPE_INTERVAL) {
-            spawnPipe();
-            pipeSpawnCounter = 0;
         }
 
-        for (let i = pipes.length - 1; i >= 0; i--) {
-            const pipe = pipes[i];
-            pipe.update();
-
-            // Check for collision
-            if (pipe.collidesWith(flyer)) {
-                endGame();
-                return;
-            }
-
-            // Check for scoring (passed the pipe center)
-            if (!pipe.scored && pipe.x + pipe.width < flyer.x) {
-                score++;
-                pipe.scored = true;
-            }
-
-            // Remove pipe when off-screen
-            if (pipe.x + pipe.width < 0) {
-                pipes.splice(i, 1);
-            }
-        }
-    }
-
-    function draw() {
-        // Draw background
-        ctx.fillStyle = '#87CEEB';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Draw pipes
-        pipes.forEach(pipe => pipe.draw());
-
-        // Draw flyer
-        flyer.draw();
-
-        // Draw score
-        ctx.fillStyle = 'white';
-        ctx.font = '30px Inter';
-        ctx.textAlign = 'left';
-        ctx.fillText('Score: ' + score, 10, 30);
-    }
-
-    function gameLoop() {
-        if (gameState !== 'playing') return;
-        
-        updateGame();
-        draw();
-    }
-
-    function startGame() {
-        resetGame();
-        gameState = 'playing';
-        showGameScreen();
-        // Set the game loop to run 60 times per second
-        gameLoopInterval = setInterval(gameLoop, 1000 / 60); 
-    }
-
-    function endGame() {
-        gameState = 'over';
-        clearInterval(gameLoopInterval);
-        
-        // Draw one final frame (e.g., to show collision point)
-        draw(); 
-        
-        // Show end game screen
-        showEndScreen();
-    }
-
-    function handleInput(event) {
-        event.preventDefault(); // Prevent scrolling on touch
-        if (gameState === 'playing') {
-            flyer.jump();
-        } else if (gameState === 'waiting' || gameState === 'over') {
-            // Check if the click was on the canvas and not a button
-            if (event.target.id === 'gameCanvas' || event.target.id === 'game-container') {
-                // If it's the start screen, allow clicking to start
-                if (gameState === 'waiting') {
-                    startGame();
-                } 
-                // If it's the game over screen, rely on button click
-            }
-        }
-    }
-
-    // --- UI/Messaging Functions ---
-
-    function showStartScreen() {
-        gameState = 'waiting';
-        messageTitle.textContent = "Telegram Flyer";
-        messageText.innerHTML = "Tap the screen or click 'Start' to launch! <br> Avoid the green pipes.";
-        startButton.classList.remove('hidden');
-        submitButton.classList.add('hidden');
-        finalScoreDisplay.classList.add('hidden');
-        messageBox.classList.add('active');
-    }
-
-    function showGameScreen() {
-        messageBox.classList.remove('active');
-    }
-
-    function showEndScreen() {
-        messageTitle.textContent = "Game Over!";
-        messageText.textContent = "Do you want to submit your score to the leaderboard?";
-        
-        startButton.classList.add('hidden');
-        finalScoreDisplay.classList.remove('hidden');
-        finalScoreValue.textContent = score;
-        submitButton.classList.remove('hidden');
-        
-        messageBox.classList.add('active');
-    }
-
-    // --- Telegram API Integration ---
-
-    function submitScore() {
-        // Check if TelegramGameProxy object is available (i.e., running inside Telegram)
-        if (window.TelegramGameProxy) {
+        function endGame() {
+            if (isGameOver) return;
+            isGameOver = true;
+            cancelAnimationFrame(animationFrameId);
             
-            // Send the score back to the Telegram bot
-            // is_high_score: Pass True to update the high score, False to just update the message.
-            // disable_edit_message: Don't update the message text with the score, just update the leaderboard.
-            // The score is the current final score.
-            window.TelegramGameProxy.setScore(
-                score, 
-                true, // is_high_score
-                null // callback to run after submission
-            );
+            finalScoreValue.textContent = score;
             
-            // Optionally, you can also share the score to a chat
-            // window.TelegramGameProxy.shareScore();
-            
-            // Provide feedback to the user
-            messageTitle.textContent = "Score Submitted!";
-            messageText.textContent = "Check the chat to see your rank on the leaderboard.";
-            submitButton.textContent = "Play Again?";
-            submitButton.onclick = startGame;
-        } else {
-            alert('Score submission only works when launched from a Telegram bot.');
-        }
-    }
+            // Simple high score logic (client-side only for display)
+            const currentHighScore = localStorage.getItem('telegramFlyerHighScore') || 0;
+            if (score > currentHighScore) {
+                localStorage.setItem('telegramFlyerHighScore', score);
+                highScoreMessage.textContent = `New High Score! Previous: ${currentHighScore}`;
+            } else {
+                highScoreMessage.textContent = `High Score: ${currentHighScore}`;
+            }
 
-</script>
+            messageBox.classList.add('active');
+        }
+
+        function gameLoop(timestamp) {
+            if (isGameOver) return;
+
+            // Spawning logic
+            if (timestamp - lastPipeTime > pipeInterval) {
+                spawnPipe();
+                lastPipeTime = timestamp;
+            }
+
+            // Drawing and Updates
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            player.update();
+            player.draw();
+
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                const p = pipes[i];
+                p.update();
+                p.draw();
+                
+                if (p.x + p.width < 0) {
+                    pipes.splice(i, 1);
+                }
+            }
+
+            checkCollision();
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- BUTTON HANDLERS (TELEGRAM INTERACTION) ---
+
+        // Submits the score to the Telegram API
+        function submitScore() {
+            if (typeof TelegramGameProxy !== 'undefined') {
+                // Pass the current score. The 'edit_message' parameter (true) updates the original game message.
+                // The API call is blocked if the user/message context isn't available from the launch.
+                TelegramGameProxy.setScore(score, true);
+                
+                // Optional: Provide visual feedback
+                submitButton.textContent = 'Submitted!';
+                submitButton.disabled = true;
+                setTimeout(() => {
+                    submitButton.textContent = 'Submit Score';
+                    submitButton.disabled = false;
+                }, 2000);
+
+            } else {
+                alert('Telegram Game Proxy not available. Cannot submit score.');
+            }
+        }
+
+        // Opens the Telegram share dialog
+        function shareGame() {
+            if (typeof TelegramGameProxy !== 'undefined') {
+                // Share the score and prompt the user to choose a chat to send the game to.
+                // The score is automatically included in the share message.
+                TelegramGameProxy.shareScore(score);
+
+                // Optional: Provide visual feedback
+                shareButton.textContent = 'Sharing...';
+                shareButton.disabled = true;
+                setTimeout(() => {
+                    shareButton.textContent = 'Share Score';
+                    shareButton.disabled = false;
+                }, 2000);
+            } else {
+                alert('Telegram Game Proxy not available. Cannot share game.');
+            }
+        }
+        
+        // --- EVENT LISTENERS ---
+        retryButton.addEventListener('click', initGame);
+        submitButton.addEventListener('click', submitScore);
+        shareButton.addEventListener('click', shareGame);
+        
+        // Start the game on load
+        window.onload = initGame;
+    </script>
 </body>
 </html>
