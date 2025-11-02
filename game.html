@@ -125,7 +125,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-    <div id="game-container" onclick="jump()">
+    <div id="game-container">
         <canvas id="gameCanvas"></canvas>
         <div id="score-display">0</div>
 
@@ -159,6 +159,7 @@
         const submitButton = document.getElementById('submit-button');
         const shareButton = document.getElementById('share-button');
         const highScoreMessage = document.getElementById('high-score-message');
+        const gameContainer = document.getElementById('game-container');
         const startScreen = document.getElementById('start-screen');
 
         // --- GAME VARIABLES ---
@@ -172,6 +173,15 @@
         let lastPipeTime = 0;
         let animationFrameId;
         let gameRunning = false;
+        
+        // --- TELEGRAM CONTEXT ---
+        function getTelegramUserId() {
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+                return window.Telegram.WebApp.initDataUnsafe.user.id;
+            }
+            return null;
+        }
+
 
         // --- GAME OBJECTS ---
         class Player {
@@ -196,7 +206,6 @@
                 ctx.save();
                 ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
                 
-                // Rotation based on velocity for slight tilt
                 let angle = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, this.velocity * 0.05));
                 ctx.rotate(angle);
                 
@@ -210,7 +219,7 @@
                 ctx.fill();
 
                 // Draw Thruster (Orange/Red)
-                if (this.velocity > -5) { // Only show thruster when player is not actively tapping up
+                if (this.velocity > -5) {
                     ctx.fillStyle = '#FFA500'; // Orange
                     ctx.beginPath();
                     ctx.moveTo(15, -4);
@@ -240,20 +249,21 @@
             draw() {
                 // Black Hole Anomalies (drawn as dark circles with a glow)
                 
-                // Top Anomaly (centered on the line)
-                ctx.fillStyle = '#000000';
                 ctx.shadowColor = '#FF00FF';
                 ctx.shadowBlur = 10;
+                
+                // Top Anomaly
+                ctx.fillStyle = '#000000';
                 ctx.beginPath();
                 ctx.arc(this.x + this.radius, this.gapY - this.gap / 2, this.radius, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Bottom Anomaly (centered on the line)
+                // Bottom Anomaly
                 ctx.beginPath();
                 ctx.arc(this.x + this.radius, this.gapY + this.gap / 2, this.radius, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.shadowBlur = 0; // Reset shadow
+                ctx.shadowBlur = 0;
             }
         }
 
@@ -293,8 +303,6 @@
             player.velocity = lift;
         }
         
-        startScreen.addEventListener('click', initGame);
-        
         function spawnPipe() {
             const gapY = Math.random() * (canvas.height - 2 * pipeGap) + pipeGap;
             pipes.push(new Pipe(gapY));
@@ -308,7 +316,6 @@
                 const p = pipes[i];
                 const pipeCenter = p.x + p.width / 2;
                 
-                // Check X overlap
                 if (
                     player.x < p.x + p.width &&
                     player.x + player.width > p.x
@@ -334,7 +341,6 @@
                     }
                 }
 
-                // Check for scoring
                 if (pipeCenter < player.x && !p.scored) {
                     score++;
                     scoreDisplay.textContent = score;
@@ -368,13 +374,11 @@
 
             if (!lastPipeTime) lastPipeTime = timestamp;
 
-            // Spawning logic
             if (timestamp - lastPipeTime > pipeInterval) {
                 spawnPipe();
                 lastPipeTime = timestamp;
             }
 
-            // Drawing and Updates
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#0a0a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -401,9 +405,12 @@
 
         function submitScore() {
             if (typeof TelegramGameProxy !== 'undefined') {
-                // Pass the current score. 'true' tells Telegram to update the original message.
-                // TelegramGameProxy automatically uses the context (chat_id, message_id) from the launch.
-                TelegramGameProxy.setScore(score, true);
+                const userId = getTelegramUserId();
+                
+                // The third parameter is 'force' (optional, boolean), which forces the update even if the score is lower.
+                // We use the optional userId parameter (fourth argument) for max compatibility.
+                // The 'edit_message' parameter (true) updates the original game message.
+                TelegramGameProxy.setScore(score, true, null, userId); 
                 
                 submitButton.textContent = 'Submitted!';
                 submitButton.disabled = true;
@@ -414,7 +421,7 @@
 
         function shareGame() {
             if (typeof TelegramGameProxy !== 'undefined') {
-                // Share the score. The score is automatically embedded in the share message.
+                // shareScore optionally takes a score. We pass the final score.
                 TelegramGameProxy.shareScore(score);
 
                 shareButton.textContent = 'Sharing...';
@@ -429,34 +436,40 @@
         }
         
         // --- EVENT LISTENERS ---
-        retryButton.addEventListener('click', () => {
-            messageBox.classList.remove('active');
-            submitButton.textContent = 'Submit Score';
-            submitButton.disabled = false;
-            initGame();
-        });
-        submitButton.addEventListener('click', submitScore);
-        shareButton.addEventListener('click', shareGame);
+        
+        function setupEventListeners() {
+            gameContainer.addEventListener('click', jump);
+            startScreen.addEventListener('click', jump);
 
+            // Re-attach listeners to the specific buttons
+            retryButton.addEventListener('click', () => {
+                messageBox.classList.remove('active');
+                submitButton.textContent = 'Submit Score';
+                submitButton.disabled = false;
+                initGame();
+            });
+            submitButton.addEventListener('click', submitScore);
+            shareButton.addEventListener('click', shareGame);
+        }
+        
         // Resize handler
         window.addEventListener('resize', () => {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
             if (!gameRunning && !isGameOver) {
-                // Redraw the start screen state
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
         });
         
-        // Initial setup to draw the start screen correctly on load
+        // Initial setup
         window.onload = () => {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
             startScreen.style.display = 'flex';
+            setupEventListeners();
         };
 
-        // Initialize the game when the window is loaded to set canvas dimensions
-        // The actual game loop starts only after the user taps the start screen.
+        // Initialize the game when the window is loaded (starts setup, not the game loop)
     </script>
 </body>
 </html>
