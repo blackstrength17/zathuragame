@@ -1,9 +1,8 @@
 import os
 import logging
-from telegram import Update, InlineKeyboardMarkup, InlineQueryResultGame
-from telegram import InlineKeyboardButton, WebAppInfo
+from telegram import Update, InlineKeyboardMarkup, InlineQueryResultGame, Bot
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
-from telegram.ext import ContextTypes, InlineQueryHandler
+from telegram.ext import ContextTypes, InlineQueryHandler, ExtBot
 
 # --- CONFIGURATION (FINALIZED WITH YOUR VALUES) ---
 # 1. Your API Token
@@ -24,6 +23,9 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+# Instantiate the Application globally (part of the final fix)
+application = Application.builder().token(BOT_TOKEN).build()
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Sends a message with a button that launches the game."""
@@ -49,7 +51,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles inline queries to suggest the game."""
-    query = update.inline_query.query
+    if not update.inline_query:
+        return
+        
     results = [
         InlineQueryResultGame(
             id="1", 
@@ -58,6 +62,29 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     ]
     
     await update.inline_query.answer(results, cache_time=5)
+
+async def set_game_url_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """TEMPORARY DEBUG COMMAND: Forces the game URL update via API call."""
+    try:
+        # The set_game_short_name method updates the URL property for the game.
+        success = await context.bot.set_game_short_name(
+            game_short_name=GAME_SHORT_NAME,
+            url=HOSTED_GAME_URL
+        )
+        
+        if success:
+            message = f"✅ Game URL updated successfully! URL: {HOSTED_GAME_URL}"
+        else:
+            # Telegram API returns False on failure
+            message = "❌ Failed to update Game URL. Check BotFather settings and game name."
+
+    except Exception as e:
+        # Catch any network or API call errors
+        message = f"❌ Error communicating with Telegram API: {e}"
+        logger.error(f"Error in /setgameurl: {e}")
+
+    await update.message.reply_text(message)
+
 
 async def set_game_score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the high score submission from the game (Telegram API handles the update)."""
@@ -69,29 +96,29 @@ async def set_game_score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # If it's a non-game button, just acknowledge the press
         await update.callback_query.answer()
 
-def run_bot() -> None:
-    """Initializes and runs the bot application."""
-    if not BOT_TOKEN:
-        logger.error("BOT_TOKEN is not set. Cannot run the bot.")
-        return
-
-    application = Application.builder().token(BOT_TOKEN).build()
-
+def run_app() -> None:
+    """Runs the application with webhook or polling."""
+    
     # 1. Command handler for /start
     application.add_handler(CommandHandler("start", start_command))
     
-    # 2. Callback handler for the inline game button press
+    # 2. TEMPORARY DEBUG COMMAND
+    application.add_handler(CommandHandler("setgameurl", set_game_url_command))
+
+    # 3. Callback handler for the inline game button press
     application.add_handler(CallbackQueryHandler(button_callback, pattern='^' + GAME_SHORT_NAME + '$'))
     
-    # 3. Inline Query Handler
+    # 4. Inline Query Handler
     application.add_handler(InlineQueryHandler(inline_query_handler))
     
-    # 4. Fallback callback handler for score updates
+    # 5. Fallback callback handler for score updates
     application.add_handler(CallbackQueryHandler(set_game_score))
+
 
     # --- DEPLOYMENT MODE (WEBHOOK) ---
     if WEBHOOK_URL:
         logger.info(f"Starting bot with Webhook at {WEBHOOK_URL} on port {PORT}")
+        # Run webhook on all interfaces, listening on the port provided by the environment
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
@@ -107,8 +134,8 @@ def run_bot() -> None:
 # This function is the entry point Gunicorn is explicitly configured to call in the Procfile (gameback:main)
 def main():
     """Main entry point for Gunicorn."""
-    run_bot()
+    run_app()
 
 if __name__ == "__main__":
-    # If run locally (e.g., python gameback.py), it calls the run_bot function
-    run_bot()
+    # If run locally (e.g., python gameback.py), it calls the run_app function
+    run_app()
