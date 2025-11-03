@@ -103,7 +103,7 @@
         <div id="score-display">0</div>
 
         <!-- Start/Instruction Screen -->
-        <div id="start-screen" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 300; cursor: pointer;">
+        <div id="start-screen" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center;">
             <h1 style="font-size: 2.5em; margin-bottom: 20px;">🚀 ZATHURA FLYER</h1>
             <p style="font-size: 1.2em; color: #00FFFF;">TAP ANYWHERE TO THRUST</p>
             <p style="font-size: 1em; color: #E0E0E0; margin-top: 10px;">AVOID THE BLACK HOLE ANOMALIES</p>
@@ -145,6 +145,91 @@
         
         let nebulaParticles = [];
         let numParticles = 50;
+
+        // --- AUDIO (WebAudio simple synthesized sounds) ---
+        // This avoids needing external audio files and will work cross-platform.
+        const AudioEngine = (function() {
+            let ctx = null;
+            function ensureContext() {
+                if (!ctx) {
+                    try {
+                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                        ctx = new AudioCtx();
+                    } catch (e) {
+                        console.warn('WebAudio not supported:', e);
+                        ctx = null;
+                    }
+                }
+                return ctx;
+            }
+
+            // Play a short tone with given frequency, duration and type
+            function playTone(freq = 440, duration = 0.08, type = 'sine', gain = 0.06, when = 0) {
+                const audioCtx = ensureContext();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime + when;
+                const o = audioCtx.createOscillator();
+                const g = audioCtx.createGain();
+                o.type = type;
+                o.frequency.value = freq;
+                g.gain.value = gain;
+                // Envelope
+                g.gain.setValueAtTime(0.0001, now);
+                g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+                o.connect(g);
+                g.connect(audioCtx.destination);
+                o.start(now);
+                o.stop(now + duration + 0.02);
+            }
+
+            // Small burst/noise for explosion/game-over
+            function playNoise(duration = 0.25, volume = 0.12) {
+                const audioCtx = ensureContext();
+                if (!audioCtx) return;
+                const bufferSize = audioCtx.sampleRate * duration;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-3 * i / bufferSize);
+                }
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                const g = audioCtx.createGain();
+                g.gain.value = volume;
+                source.connect(g);
+                g.connect(audioCtx.destination);
+                source.start();
+            }
+
+            return {
+                playJump() {
+                    // A quick upward arpeggio style tone
+                    playTone(880, 0.05, 'triangle', 0.06);
+                    playTone(1100, 0.06, 'triangle', 0.04, 0.04);
+                },
+                playScore() {
+                    // Short pleasant chime
+                    playTone(1200, 0.06, 'sine', 0.06);
+                    playTone(1600, 0.06, 'sine', 0.04, 0.04);
+                },
+                playGameOver() {
+                    // Noise + low descending tone
+                    playNoise(0.25, 0.12);
+                    playTone(300, 0.4, 'sawtooth', 0.12);
+                    playTone(180, 0.5, 'sine', 0.06, 0.08);
+                },
+                resumeIfNeeded() {
+                    // Some browsers require a user gesture to resume audio context.
+                    const audioCtx = ctx;
+                    if (audioCtx && audioCtx.state === 'suspended') {
+                        audioCtx.resume().catch(e => {
+                            // ignore
+                        });
+                    }
+                }
+            };
+        })();
 
         // --- NEBULA BACKGROUND LOGIC ---
         function initNebula() {
@@ -288,20 +373,29 @@
             startScreen.style.display = 'none';
             
             initNebula(); // Re-initialize background particles
-            
+            lastPipeTime = 0;
+
+            AudioEngine.resumeIfNeeded();
+
             gameLoop();
         }
         
         function jump() {
+            // Ensure audio context unlocked if needed
+            AudioEngine.resumeIfNeeded();
+
             if (isGameOver) {
+                AudioEngine.playJump(); // small sound for retry/starting
                 initGame();
                 return;
             }
             if (!gameRunning) {
+                AudioEngine.playJump();
                 initGame();
                 return;
             }
             player.velocity = lift;
+            AudioEngine.playJump();
         }
         
         function spawnPipe() {
@@ -353,6 +447,8 @@
                     score++;
                     scoreDisplay.textContent = score;
                     p.scored = true;
+                    // Play scoring sound
+                    AudioEngine.playScore();
                 }
             }
             return false;
@@ -366,7 +462,7 @@
             
             finalScoreValue.textContent = score;
             
-            const currentHighScore = localStorage.getItem('telegramFlyerHighScore') || 0;
+            const currentHighScore = parseInt(localStorage.getItem('telegramFlyerHighScore') || "0", 10);
             
             if (score > currentHighScore) {
                 localStorage.setItem('telegramFlyerHighScore', score);
@@ -376,6 +472,9 @@
                 highScoreValue.textContent = currentHighScore;
                 highScoreMessage.textContent = `Good job!`;
             }
+
+            // Play game over sound
+            AudioEngine.playGameOver();
 
             messageBox.classList.add('active');
         }
@@ -414,9 +513,26 @@
         // --- EVENT LISTENERS ---
         
         function setupEventListeners() {
+            // On first user gesture, make sure audio context can run in browsers that block audio until gesture
+            function unlockAudioOnFirstGesture() {
+                AudioEngine.resumeIfNeeded();
+                window.removeEventListener('touchstart', unlockAudioOnFirstGesture);
+                window.removeEventListener('mousedown', unlockAudioOnFirstGesture);
+            }
+            window.addEventListener('touchstart', unlockAudioOnFirstGesture, {passive:true});
+            window.addEventListener('mousedown', unlockAudioOnFirstGesture);
+
             gameContainer.addEventListener('click', jump);
             startScreen.addEventListener('click', jump);
             messageBox.addEventListener('click', jump);
+
+            // Also support keyboard space for desktop
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    jump();
+                }
+            });
         }
         
         // Resize handler
