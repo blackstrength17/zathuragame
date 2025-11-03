@@ -285,7 +285,7 @@
             playerGroup.rotation.y = Math.PI / 2;
             
             playerMesh = playerGroup;
-            playerMesh.position.set(WORLD_X_PLAYER, playerY, 0); // Use current playerY
+            playerMesh.position.set(WORLD_X_PLAYER, playerY, 0); 
             scene.add(playerMesh);
         }
 
@@ -378,10 +378,13 @@
             if (isGameOver) {
                 pipes.forEach(p => scene.remove(p));
                 pipes = [];
-                scene.remove(playerMesh);
+                // Remove old player mesh
+                if (playerMesh) {
+                    scene.remove(playerMesh);
+                }
             }
             
-            createPlayerMesh();
+            createPlayerMesh(); // Fix: Call createPlayerMesh here
             playerY = 0;
             playerVelocity = 0;
             score = 0;
