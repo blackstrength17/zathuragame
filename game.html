@@ -12,7 +12,7 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #0a0a1a; /* Deep Space Nebula Background */
+            background-color: #000; /* Solid black base */
             font-family: 'Arial', sans-serif;
             color: #E0E0E0;
             overflow: hidden;
@@ -25,10 +25,10 @@
             height: 80vh;
             max-height: 600px;
             overflow: hidden;
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5); /* Cyan glow */
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
             border-radius: 15px;
             border: 3px solid #00FFFF;
-            background: radial-gradient(circle at center, #1a1a3a 0%, #0a0a1a 100%);
+            background: #000; /* Canvas will cover this */
         }
         canvas {
             display: block;
@@ -72,8 +72,8 @@
             visibility: visible;
         }
         h1 {
-            color: #FF00FF; /* Magenta */
-            text-shadow: 0 0 10px #FF00FF;
+            color: #FFD700; /* Gold/Yellow for fire */
+            text-shadow: 0 0 10px #FFA500;
             font-size: 3em;
             margin-bottom: 5px;
         }
@@ -107,7 +107,7 @@
             <h1 style="font-size: 2.5em; margin-bottom: 20px;">🚀 ZATHURA FLYER</h1>
             <p style="font-size: 1.2em; color: #00FFFF;">TAP ANYWHERE TO THRUST</p>
             <p style="font-size: 1em; color: #E0E0E0; margin-top: 10px;">AVOID THE BLACK HOLE ANOMALIES</p>
-            <p style="font-size: 0.8em; color: #FF00FF; margin-top: 30px;">(Click to Start)</p>
+            <p style="font-size: 0.8em; color: #FFD700; margin-top: 30px;">(Click to Start)</p>
         </div>
 
         <!-- Game Over Screen (Now the universal retry button) -->
@@ -143,6 +143,50 @@
         let animationFrameId;
         let gameRunning = false;
         
+        let nebulaParticles = [];
+        let numParticles = 50;
+
+        // --- NEBULA BACKGROUND LOGIC ---
+        function initNebula() {
+            nebulaParticles = [];
+            for (let i = 0; i < numParticles; i++) {
+                nebulaParticles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 20 + 5,
+                    color: `rgba(${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 100) + 155}, 0.05)`, // Blueish nebula colors
+                    speed: Math.random() * 0.1 + 0.05
+                });
+            }
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < nebulaParticles.length; i++) {
+                let p = nebulaParticles[i];
+                
+                // Move particle (subtle flow effect)
+                p.x -= p.speed;
+                if (p.x < -p.radius) {
+                    p.x = canvas.width + p.radius;
+                    p.y = Math.random() * canvas.height;
+                }
+
+                // Draw gradient circle
+                let gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
+                gradient.addColorStop(0, p.color.replace('0.05', '0.2'));
+                gradient.addColorStop(1, p.color.replace('0.05', '0'));
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+
         // --- GAME OBJECTS ---
         class Player {
             constructor() {
@@ -156,15 +200,6 @@
             update() {
                 this.velocity += gravity;
                 this.y += this.velocity;
-                
-                // --- BOUNDARY CHECK (NEW) ---
-                if (this.y < 0 || this.y + this.height > canvas.height) {
-                    endGame();
-                }
-                // If collision wasn't detected, update position
-                if (!isGameOver) {
-                     this.y = this.y;
-                }
             }
             draw() {
                 ctx.save();
@@ -182,9 +217,10 @@
                 ctx.closePath();
                 ctx.fill();
 
-                // Draw Thruster (Orange/Red)
+                // Draw Thruster (Orange/Red) - Brighter when tapping
+                let thrusterColor = this.velocity < lift + 1 ? '#FFD700' : '#FFA500';
                 if (this.velocity > -5) {
-                    ctx.fillStyle = '#FFA500'; // Orange
+                    ctx.fillStyle = thrusterColor; 
                     ctx.beginPath();
                     ctx.moveTo(15, -4);
                     ctx.lineTo(25, 0);
@@ -211,17 +247,19 @@
                 this.x -= pipeSpeed;
             }
             draw() {
-                ctx.shadowColor = '#FF00FF';
+                // Fiery Accretion Disk Glow
+                ctx.shadowColor = '#FFD700'; /* Gold/Yellow */
                 ctx.shadowBlur = 10;
                 
-                // Top Anomaly
+                // Black Hole Anomalies
                 ctx.fillStyle = '#000000';
+                
+                // Top Anomaly
                 ctx.beginPath();
                 ctx.arc(this.x + this.radius, this.gapY - this.gap / 2, this.radius, 0, Math.PI * 2);
                 ctx.fill();
 
                 // Bottom Anomaly
-                ctx.fillStyle = '#000000';
                 ctx.beginPath();
                 ctx.arc(this.x + this.radius, this.gapY + this.gap / 2, this.radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -249,7 +287,7 @@
             messageBox.classList.remove('active');
             startScreen.style.display = 'none';
             
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            initNebula(); // Re-initialize background particles
             
             gameLoop();
         }
@@ -275,7 +313,13 @@
             const playerCenterY = player.y + player.height / 2;
             const playerCenterX = player.x + player.width / 2;
 
-            // 1. Pipe Collision Check (Anomaly Collision)
+            // 1. Boundary Collision Check
+            if (player.y < 0 || player.y + player.height > canvas.height) {
+                endGame();
+                return true;
+            }
+
+            // 2. Pipe Collision Check (Anomaly Collision)
             for (let i = 0; i < pipes.length; i++) {
                 const p = pipes[i];
                 const pipeCenter = p.x + p.width / 2;
@@ -346,15 +390,11 @@
                 lastPipeTime = timestamp;
             }
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#0a0a1a';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 1. Draw Background (Nebula)
+            drawBackground();
 
             player.update();
             player.draw();
-
-            // Run collision check immediately after player update (which includes boundary check)
-            checkCollision();
 
             for (let i = pipes.length - 1; i >= 0; i--) {
                 const p = pipes[i];
@@ -366,13 +406,14 @@
                 }
             }
 
+            checkCollision();
+
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
         // --- EVENT LISTENERS ---
         
         function setupEventListeners() {
-            // Universal click handlers for jump/start/retry
             gameContainer.addEventListener('click', jump);
             startScreen.addEventListener('click', jump);
             messageBox.addEventListener('click', jump);
@@ -382,8 +423,9 @@
         window.addEventListener('resize', () => {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
+            initNebula(); // Redraw nebula on resize
             if (!gameRunning && !isGameOver) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBackground(); // Redraw static background on setup screens
             }
         });
         
@@ -391,6 +433,8 @@
         window.onload = () => {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
+            initNebula();
+            drawBackground();
             startScreen.style.display = 'flex';
             setupEventListeners();
         };
