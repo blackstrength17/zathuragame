@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Zathura Flyer</title>
+    <title>Zathura Flyer</title>
     <style>
         body {
             display: flex;
@@ -29,6 +29,10 @@
             border-radius: 15px;
             border: 3px solid #00FFFF;
             background: #000;
+        }
+        #three-container {
+            width: 100%; 
+            height: 100%;
         }
         canvas {
             display: block;
@@ -104,13 +108,13 @@
 <body>
     <div id="game-container">
         <!-- Three.js will render into this container -->
-        <div id="three-container" style="width: 100%; height: 100%;"></div>
+        <div id="three-container"></div>
         
         <div id="score-display">0</div>
 
         <!-- Start/Instruction Screen -->
         <div id="start-screen" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 300; cursor: pointer;">
-            <h1 style="font-size: 2.5em; margin-bottom: 20px;">🚀 3D ZATHURA FLYER</h1>
+            <h1 style="font-size: 2.5em; margin-bottom: 20px;">🚀 ZATHURA FLYER</h1>
             <p style="font-size: 1.2em; color: #00FFFF;">TAP ANYWHERE TO THRUST</p>
             <p style="font-size: 1em; color: #E0E0E0; margin-top: 10px;">AVOID THE BLACK HOLE ANOMALIES</p>
             <p style="font-size: 0.8em; color: #FFD700; margin-top: 30px;">(Click to Start)</p>
@@ -147,16 +151,15 @@
         let playerVelocity = 0;
         const gravity = 0.0055;
         const lift = -0.15;
-        const PIPE_GAP = 3.5; // World units
+        const PIPE_GAP = 3.5;
         const PIPE_WIDTH = 0.5;
-        const PIPE_DEPTH = 0.5;
         const PIPE_SPEED = 0.015;
         const PIPE_INTERVAL_TIME = 1500;
         let lastPipeTime = 0;
         let gameRunning = false;
         
-        // --- WORLD COORDINATES (for easier 2D-like boundary checks)
-        const WORLD_HEIGHT = 5; // Total vertical distance of the game view
+        // --- WORLD COORDINATES
+        const WORLD_HEIGHT = 5;
         const WORLD_DEPTH = 10;
         const WORLD_X_PLAYER = -3;
         const CAMERA_Z = 6;
@@ -224,9 +227,12 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0a0a1a); 
 
-            // Camera setup (Orthographic for 2D feel in 3D space)
-            const aspectRatio = threeContainer.clientWidth / threeContainer.clientHeight;
+            // Camera setup 
+            const containerWidth = threeContainer.clientWidth;
+            const containerHeight = threeContainer.clientHeight;
+            const aspectRatio = containerWidth / containerHeight;
             const viewSize = WORLD_HEIGHT; 
+            
             camera = new THREE.OrthographicCamera(
                 viewSize * aspectRatio / -2, viewSize * aspectRatio / 2,
                 viewSize / 2, viewSize / -2, 
@@ -235,9 +241,14 @@
             camera.position.z = CAMERA_Z;
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(threeContainer.clientWidth, threeContainer.clientHeight);
+            renderer.setSize(containerWidth, containerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            threeContainer.appendChild(renderer.domElement);
+            
+            // Append the renderer to the container here
+            if (threeContainer.children.length === 0) {
+                 threeContainer.appendChild(renderer.domElement);
+            }
+
 
             // Lighting
             light = new THREE.PointLight(0xffffff, 1, 100);
@@ -245,7 +256,7 @@
             scene.add(light);
             scene.add(new THREE.AmbientLight(0x404040, 2)); 
 
-            // Background Stars/Nebula (simplified using particles)
+            // Background Stars/Nebula
             const starsGeometry = new THREE.BufferGeometry();
             const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.7 });
             const starVertices = [];
@@ -260,7 +271,6 @@
         }
 
         function createPlayerMesh() {
-            // Spaceship: Cone (nose) + Box (body)
             const bodyGeo = new THREE.BoxGeometry(0.5, 0.3, 0.3);
             const noseGeo = new THREE.ConeGeometry(0.15, 0.3, 8);
             const mat = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 30 });
@@ -268,14 +278,13 @@
             const body = new THREE.Mesh(bodyGeo, mat);
             const nose = new THREE.Mesh(noseGeo, mat);
 
-            // Position nose on the front of the body
             nose.position.set(-0.25, 0, 0);
-            nose.rotation.z = Math.PI / 2; // Rotate to face forward
+            nose.rotation.z = Math.PI / 2;
 
             const playerGroup = new THREE.Group();
             playerGroup.add(body, nose);
             
-            playerGroup.rotation.y = Math.PI / 2; // Turn it to face the side
+            playerGroup.rotation.y = Math.PI / 2;
             
             playerMesh = playerGroup;
             playerMesh.position.set(WORLD_X_PLAYER, 0, 0);
@@ -286,7 +295,7 @@
             const anomalyGroup = new THREE.Group();
             const material = new THREE.MeshPhongMaterial({ color: 0x000000, shininess: 10 });
             
-            // Top Anomaly (Black Sphere)
+            // Top Anomaly
             const topSphere = new THREE.Mesh(
                 new THREE.SphereGeometry(PIPE_WIDTH, 16, 16),
                 material
@@ -294,7 +303,7 @@
             topSphere.position.set(0, gapY + PIPE_GAP / 2, 0);
             topSphere.castShadow = true;
             
-            // Bottom Anomaly (Black Sphere)
+            // Bottom Anomaly
             const bottomSphere = new THREE.Mesh(
                 new THREE.SphereGeometry(PIPE_WIDTH, 16, 16),
                 material
@@ -302,7 +311,7 @@
             bottomSphere.position.set(0, gapY - PIPE_GAP / 2, 0);
             bottomSphere.castShadow = true;
 
-            // Add glow using a yellow light (simulates the accretion disk)
+            // Accretion Disk Glow
             const glowLightColor = 0xFFA500; 
             const topGlow = new THREE.PointLight(glowLightColor, 0.5, 3);
             topGlow.position.copy(topSphere.position);
@@ -312,10 +321,8 @@
 
             anomalyGroup.add(topSphere, bottomSphere, topGlow, bottomGlow);
             
-            // Set initial position far to the right
             anomalyGroup.position.set(WORLD_DEPTH, 0, 0); 
             anomalyGroup.userData.scored = false;
-            anomalyGroup.userData.gapY = gapY;
             anomalyGroup.userData.pipeRadius = PIPE_WIDTH;
 
             scene.add(anomalyGroup);
@@ -326,7 +333,7 @@
 
         function check3DCollision() {
             const playerPos = playerMesh.position;
-            const playerRadius = 0.5; // Approximate radius for simple collision on the group
+            const playerRadius = 0.5; 
 
             for (let i = pipes.length - 1; i >= 0; i--) {
                 const pipeGroup = pipes[i];
@@ -339,11 +346,9 @@
                 const topAnomalyPos = new THREE.Vector3().setFromMatrixPosition(topAnomaly.matrixWorld);
                 const bottomAnomalyPos = new THREE.Vector3().setFromMatrixPosition(bottomAnomaly.matrixWorld);
 
-                // Simple sphere collision check
                 const distanceTop = playerPos.distanceTo(topAnomalyPos);
                 const distanceBottom = playerPos.distanceTo(bottomAnomalyPos);
                 
-                // If overlap in X (which is playerPos.x and pipePos.x)
                 if (Math.abs(playerPos.x - pipePos.x) < 1.5) { 
                     if (distanceTop < playerRadius + pipeGroup.userData.pipeRadius || 
                         distanceBottom < playerRadius + pipeGroup.userData.pipeRadius) {
@@ -352,7 +357,6 @@
                     }
                 }
 
-                // Scoring check (based on X position)
                 if (pipePos.x < playerPos.x && !pipeGroup.userData.scored) {
                     score++;
                     scoreDisplay.textContent = score;
@@ -375,17 +379,13 @@
 
         function initGame() {
             if (isGameOver) {
-                // Clear old meshes
                 pipes.forEach(p => scene.remove(p));
                 pipes = [];
                 scene.remove(playerMesh);
             }
             
-            // Re-setup (called only once or after game over)
             if (!renderer) {
                 setupThreeJS();
-            } else {
-                 renderer.render(scene, camera);
             }
 
             createPlayerMesh();
@@ -399,7 +399,6 @@
             messageBox.classList.remove('active');
             startScreen.style.display = 'none';
             
-            // Start the BGM when the game starts
             SoundManager.startBGM();
 
             if (!animationFrameId) {
@@ -449,7 +448,7 @@
             messageBox.classList.add('active');
         }
 
-        function animate(timestamp) {
+        function animate() {
             animationFrameId = requestAnimationFrame(animate);
             const delta = clock.getDelta();
             
@@ -458,7 +457,7 @@
 
                 // Player Physics Update
                 playerVelocity += gravity;
-                playerY += playerVelocity;
+                playerY += playerVelocity * delta * 60; // Scale movement to delta time * constant
                 playerMesh.position.y = playerY;
 
                 // Player Rotation (Tilt)
@@ -474,9 +473,8 @@
                 // Pipe Movement and Removal
                 for (let i = pipes.length - 1; i >= 0; i--) {
                     const pipeGroup = pipes[i];
-                    pipeGroup.position.x -= PIPE_SPEED; 
+                    pipeGroup.position.x -= PIPE_SPEED * delta * 60; 
 
-                    // Remove if off-screen
                     if (pipeGroup.position.x < -WORLD_DEPTH / 2) {
                         scene.remove(pipeGroup);
                         pipes.splice(i, 1);
@@ -492,7 +490,6 @@
         // --- INITIALIZATION ---
         
         function setupEventListeners() {
-            // Universal click handler
             document.getElementById('game-container').addEventListener('click', jump);
             startScreen.addEventListener('click', jump);
             messageBox.addEventListener('click', jump);
@@ -500,20 +497,26 @@
 
         window.addEventListener('resize', () => {
             if (renderer) {
-                const aspectRatio = threeContainer.clientWidth / threeContainer.clientHeight;
+                const containerWidth = threeContainer.clientWidth;
+                const containerHeight = threeContainer.clientHeight;
+                const aspectRatio = containerWidth / containerHeight;
                 const viewSize = WORLD_HEIGHT;
+
                 camera.left = viewSize * aspectRatio / -2;
                 camera.right = viewSize * aspectRatio / 2;
                 camera.top = viewSize / 2;
                 camera.bottom = viewSize / -2;
                 camera.updateProjectionMatrix();
-                renderer.setSize(threeContainer.clientWidth, threeContainer.clientHeight);
+                
+                renderer.setSize(containerWidth, containerHeight);
             }
         });
         
         window.onload = () => {
+            // Initial setup and render on load to make the scene visible
             setupThreeJS();
-            renderer.render(scene, camera); // Initial render to show background
+            animate(); // Start the animation loop immediately to render the background
+            gameRunning = false; // Pause the game loop
             startScreen.style.display = 'flex';
             setupEventListeners();
         };
