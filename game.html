@@ -12,7 +12,7 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #000; /* Solid black base */
+            background-color: #000;
             font-family: 'Arial', sans-serif;
             color: #E0E0E0;
             overflow: hidden;
@@ -28,7 +28,7 @@
             box-shadow: 0 0 30px rgba(0, 255, 255, 0.5);
             border-radius: 15px;
             border: 3px solid #00FFFF;
-            background: #000; /* Canvas will cover this */
+            background: #000;
         }
         canvas {
             display: block;
@@ -72,7 +72,7 @@
             visibility: visible;
         }
         h1 {
-            color: #FFD700; /* Gold/Yellow for fire */
+            color: #FFD700;
             text-shadow: 0 0 10px #FFA500;
             font-size: 3em;
             margin-bottom: 5px;
@@ -96,6 +96,8 @@
     </style>
     <!-- Telegram Game SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Tone.js for Sound and Music Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 </head>
 <body>
     <div id="game-container">
@@ -103,7 +105,7 @@
         <div id="score-display">0</div>
 
         <!-- Start/Instruction Screen -->
-        <div id="start-screen" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div id="start-screen" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 300; cursor: pointer;">
             <h1 style="font-size: 2.5em; margin-bottom: 20px;">🚀 ZATHURA FLYER</h1>
             <p style="font-size: 1.2em; color: #00FFFF;">TAP ANYWHERE TO THRUST</p>
             <p style="font-size: 1em; color: #E0E0E0; margin-top: 10px;">AVOID THE BLACK HOLE ANOMALIES</p>
@@ -146,193 +148,102 @@
         let nebulaParticles = [];
         let numParticles = 50;
 
-        // --- AUDIO (WebAudio simple synthesized sounds + ambient background music) ---
-        // This avoids needing external audio files and will work cross-platform.
-        const AudioEngine = (function() {
-            let ctx = null;
-            // Background music nodes
-            let musicGain = null;
-            let musicOsc1 = null;
-            let musicOsc2 = null;
-            let musicFilter = null;
-            let musicLFO = null;
-            let musicPlaying = false;
+        // --- SOUND MANAGER (TONE.JS) ---
+        const SoundManager = {
+            initialized: false,
+            bgm: null,
+            jumpSynth: null,
+            scoreSynth: null,
+            endNoise: null,
 
-            function ensureContext() {
-                if (!ctx) {
-                    try {
-                        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                        ctx = new AudioCtx();
-                    } catch (e) {
-                        console.warn('WebAudio not supported:', e);
-                        ctx = null;
+            init() {
+                if (this.initialized) return;
+
+                // Ambient Background Music (BGM) - Simple space-themed synth pad
+                this.bgm = new Tone.PolySynth(Tone.Synth, {
+                    volume: -10,
+                    oscillator: { type: "sine" },
+                    envelope: {
+                        attack: 2,
+                        decay: 1,
+                        sustain: 0.8,
+                        release: 3
                     }
-                }
-                return ctx;
-            }
-
-            // Play a short tone with given frequency, duration and type
-            function playTone(freq = 440, duration = 0.08, type = 'sine', gain = 0.06, when = 0) {
-                const audioCtx = ensureContext();
-                if (!audioCtx) return;
-                const now = audioCtx.currentTime + when;
-                const o = audioCtx.createOscillator();
-                const g = audioCtx.createGain();
-                o.type = type;
-                o.frequency.value = freq;
-                g.gain.value = gain;
-                // Envelope
-                g.gain.setValueAtTime(0.0001, now);
-                g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
-                g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-                o.connect(g);
-                g.connect(audioCtx.destination);
-                o.start(now);
-                o.stop(now + duration + 0.02);
-            }
-
-            // Small burst/noise for explosion/game-over
-            function playNoise(duration = 0.25, volume = 0.12) {
-                const audioCtx = ensureContext();
-                if (!audioCtx) return;
-                const bufferSize = Math.floor(audioCtx.sampleRate * duration);
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = (Math.random() * 2 - 1) * Math.exp(-3 * i / bufferSize);
-                }
-                const source = audioCtx.createBufferSource();
-                source.buffer = buffer;
-                const g = audioCtx.createGain();
-                g.gain.value = volume;
-                source.connect(g);
-                g.connect(audioCtx.destination);
-                source.start();
-            }
-
-            // Start continuous ambient background music (simple synth pad)
-            function startMusic() {
-                const audioCtx = ensureContext();
-                if (!audioCtx || musicPlaying) return;
-                musicPlaying = true;
-
-                // Gain for overall music volume
-                musicGain = audioCtx.createGain();
-                musicGain.gain.value = 0.0001; // start very low for fade-in
-
-                // Two detuned oscillators for a pad
-                musicOsc1 = audioCtx.createOscillator();
-                musicOsc2 = audioCtx.createOscillator();
-                musicOsc1.type = 'sine';
-                musicOsc2.type = 'sine';
-
-                // Choose base frequencies for a pleasant drone
-                const baseFreq = 110; // A2
-                musicOsc1.frequency.value = baseFreq;
-                musicOsc2.frequency.value = baseFreq * 1.005; // slight detune
-
-                // Lowpass filter to keep it warm
-                musicFilter = audioCtx.createBiquadFilter();
-                musicFilter.type = 'lowpass';
-                musicFilter.frequency.value = 800;
-                musicFilter.Q.value = 0.8;
-
-                // Slow LFO to modulate filter cutoff for movement
-                musicLFO = audioCtx.createOscillator();
-                musicLFO.type = 'sine';
-                musicLFO.frequency.value = 0.08; // very slow
-                const lfoGain = audioCtx.createGain();
-                lfoGain.gain.value = 300; // modulation depth
-
-                // Connect nodes
-                musicOsc1.connect(musicFilter);
-                musicOsc2.connect(musicFilter);
-                musicFilter.connect(musicGain);
-                musicGain.connect(audioCtx.destination);
-
-                // LFO -> filter frequency
-                musicLFO.connect(lfoGain);
-                lfoGain.connect(musicFilter.frequency);
-
-                // Start oscillators
-                const now = audioCtx.currentTime;
-                musicOsc1.start(now);
-                musicOsc2.start(now);
-                musicLFO.start(now);
-
-                // Fade-in
-                musicGain.gain.cancelScheduledValues(now);
-                musicGain.gain.setValueAtTime(0.0001, now);
-                musicGain.gain.exponentialRampToValueAtTime(0.035, now + 1.2); // ambient low volume
-            }
-
-            // Stop background music gracefully with fade-out
-            function stopMusic() {
-                const audioCtx = ctx;
-                if (!audioCtx || !musicPlaying) return;
-                musicPlaying = false;
-                const now = audioCtx.currentTime;
-
-                // Fade out
-                if (musicGain) {
-                    musicGain.gain.cancelScheduledValues(now);
-                    musicGain.gain.setValueAtTime(musicGain.gain.value || 0.0001, now);
-                    musicGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
-                }
-
-                // Stop oscillators after fade out
-                setTimeout(() => {
-                    try {
-                        if (musicOsc1) musicOsc1.stop();
-                    } catch (e) {}
-                    try {
-                        if (musicOsc2) musicOsc2.stop();
-                    } catch (e) {}
-                    try {
-                        if (musicLFO) musicLFO.stop();
-                    } catch (e) {}
-
-                    // Disconnect everything
-                    try { if (musicOsc1) musicOsc1.disconnect(); } catch (e) {}
-                    try { if (musicOsc2) musicOsc2.disconnect(); } catch (e) {}
-                    try { if (musicFilter) musicFilter.disconnect(); } catch (e) {}
-                    try { if (musicGain) musicGain.disconnect(); } catch (e) {}
-                    try { if (musicLFO) musicLFO.disconnect(); } catch (e) {}
-
-                    musicOsc1 = musicOsc2 = musicFilter = musicGain = musicLFO = null;
-                }, 900);
-            }
-
-            return {
-                playJump() {
-                    // A quick upward arpeggio style tone
-                    playTone(880, 0.05, 'triangle', 0.06);
-                    playTone(1100, 0.06, 'triangle', 0.04, 0.04);
-                },
-                playScore() {
-                    // Short pleasant chime
-                    playTone(1200, 0.06, 'sine', 0.06);
-                    playTone(1600, 0.06, 'sine', 0.04, 0.04);
-                },
-                playGameOver() {
-                    // Noise + low descending tone
-                    playNoise(0.25, 0.12);
-                    playTone(300, 0.4, 'sawtooth', 0.12);
-                    playTone(180, 0.5, 'sine', 0.06, 0.08);
-                },
-                resumeIfNeeded() {
-                    // Some browsers require a user gesture to resume audio context.
-                    const audioCtx = ctx;
-                    if (audioCtx && audioCtx.state === 'suspended') {
-                        audioCtx.resume().catch(e => {
-                            // ignore
-                        });
+                }).toDestination();
+                
+                // Jump Sound Effect
+                this.jumpSynth = new Tone.Synth({
+                    volume: -15,
+                    oscillator: { type: "triangle" },
+                    envelope: {
+                        attack: 0.005,
+                        decay: 0.1,
+                        sustain: 0.1,
+                        release: 0.3
                     }
-                },
-                startMusic,
-                stopMusic
-            };
-        })();
+                }).toDestination();
+
+                // Score Sound Effect (Chime)
+                this.scoreSynth = new Tone.MembraneSynth({
+                    volume: -10,
+                    pitchDecay: 0.05,
+                    octaves: 2,
+                    envelope: {
+                        attack: 0.001,
+                        decay: 0.4,
+                        sustain: 0.01,
+                        release: 0.4,
+                    }
+                }).toDestination();
+
+                // Game Over Noise Burst
+                this.endNoise = new Tone.NoiseSynth({
+                    volume: -10,
+                    noise: { type: "brown" },
+                    envelope: {
+                        attack: 0.001,
+                        decay: 1.0,
+                        sustain: 0.0,
+                        release: 1.0
+                    }
+                }).toDestination();
+
+                this.initialized = true;
+            },
+
+            playJump() {
+                this.jumpSynth.triggerAttackRelease("C5", "8n");
+            },
+
+            playScore() {
+                this.scoreSynth.triggerAttackRelease("G4", "16n");
+            },
+            
+            playGameOver() {
+                this.endNoise.triggerAttackRelease("1n");
+            },
+
+            startBGM() {
+                if (this.bgm.player && this.bgm.player.state === 'started') return;
+                
+                // Simple BGM loop pattern (minor chord progression)
+                const part = new Tone.Sequence((time, note) => {
+                    this.bgm.triggerAttackRelease(note, "4n", time);
+                }, [["C3", "G3", "Bb3"], ["C3", "F3", "Ab3"], ["D3", "A3", "C4"], ["G2", "B2", "D3"]], "1n").start(0);
+
+                // Make sure the loop is set
+                Tone.Transport.loop = true;
+                Tone.Transport.loopEnd = "4n";
+
+                // Start the transport (which starts the sequence)
+                Tone.Transport.start();
+            },
+            
+            stopBGM() {
+                Tone.Transport.stop();
+                Tone.Transport.cancel(0);
+            }
+        };
 
         // --- NEBULA BACKGROUND LOGIC ---
         function initNebula() {
@@ -342,7 +253,7 @@
                     x: Math.random() * canvas.width,
                     y: Math.random() * canvas.height,
                     radius: Math.random() * 20 + 5,
-                    color: `rgba(${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 100) + 155}, 0.05)`, // Blueish nebula colors
+                    color: `rgba(${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 100) + 155}, 0.05)`,
                     speed: Math.random() * 0.1 + 0.05
                 });
             }
@@ -355,14 +266,12 @@
             for (let i = 0; i < nebulaParticles.length; i++) {
                 let p = nebulaParticles[i];
                 
-                // Move particle (subtle flow effect)
                 p.x -= p.speed;
                 if (p.x < -p.radius) {
                     p.x = canvas.width + p.radius;
                     p.y = Math.random() * canvas.height;
                 }
 
-                // Draw gradient circle
                 let gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
                 gradient.addColorStop(0, p.color.replace('0.05', '0.2'));
                 gradient.addColorStop(1, p.color.replace('0.05', '0'));
@@ -399,13 +308,13 @@
                 // Draw Spaceship Body (White/Grey)
                 ctx.fillStyle = '#C0C0C0';
                 ctx.beginPath();
-                ctx.moveTo(-15, 0); // Nose
-                ctx.lineTo(15, -9); // Top wing
-                ctx.lineTo(15, 9); // Bottom wing
+                ctx.moveTo(-15, 0);
+                ctx.lineTo(15, -9);
+                ctx.lineTo(15, 9);
                 ctx.closePath();
                 ctx.fill();
 
-                // Draw Thruster (Orange/Red) - Brighter when tapping
+                // Draw Thruster (Orange/Red)
                 let thrusterColor = this.velocity < lift + 1 ? '#FFD700' : '#FFA500';
                 if (this.velocity > -5) {
                     ctx.fillStyle = thrusterColor; 
@@ -436,7 +345,7 @@
             }
             draw() {
                 // Fiery Accretion Disk Glow
-                ctx.shadowColor = '#FFD700'; /* Gold/Yellow */
+                ctx.shadowColor = '#FFA500';
                 ctx.shadowBlur = 10;
                 
                 // Black Hole Anomalies
@@ -448,6 +357,7 @@
                 ctx.fill();
 
                 // Bottom Anomaly
+                ctx.fillStyle = '#000000';
                 ctx.beginPath();
                 ctx.arc(this.x + this.radius, this.gapY + this.gap / 2, this.radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -475,31 +385,28 @@
             messageBox.classList.remove('active');
             startScreen.style.display = 'none';
             
-            initNebula(); // Re-initialize background particles
-            lastPipeTime = 0;
-
-            AudioEngine.resumeIfNeeded();
-            AudioEngine.startMusic();
-
+            initNebula();
+            
             gameLoop();
         }
         
-        function jump() {
-            // Ensure audio context unlocked if needed
-            AudioEngine.resumeIfNeeded();
+        async function jump() {
+            if (!SoundManager.initialized) {
+                await Tone.start();
+                SoundManager.init();
+                SoundManager.startBGM();
+            }
 
             if (isGameOver) {
-                AudioEngine.playJump(); // small sound for retry/starting
                 initGame();
                 return;
             }
             if (!gameRunning) {
-                AudioEngine.playJump();
                 initGame();
                 return;
             }
+            SoundManager.playJump();
             player.velocity = lift;
-            AudioEngine.playJump();
         }
         
         function spawnPipe() {
@@ -550,9 +457,8 @@
                 if (pipeCenter < player.x && !p.scored) {
                     score++;
                     scoreDisplay.textContent = score;
+                    SoundManager.playScore(); // Play score sound
                     p.scored = true;
-                    // Play scoring sound
-                    AudioEngine.playScore();
                 }
             }
             return false;
@@ -563,10 +469,12 @@
             isGameOver = true;
             gameRunning = false;
             cancelAnimationFrame(animationFrameId);
+            SoundManager.stopBGM();
+            SoundManager.playGameOver();
             
             finalScoreValue.textContent = score;
             
-            const currentHighScore = parseInt(localStorage.getItem('telegramFlyerHighScore') || "0", 10);
+            const currentHighScore = localStorage.getItem('telegramFlyerHighScore') || 0;
             
             if (score > currentHighScore) {
                 localStorage.setItem('telegramFlyerHighScore', score);
@@ -576,12 +484,6 @@
                 highScoreValue.textContent = currentHighScore;
                 highScoreMessage.textContent = `Good job!`;
             }
-
-            // Play game over sound
-            AudioEngine.playGameOver();
-
-            // Stop ambient music
-            AudioEngine.stopMusic();
 
             messageBox.classList.add('active');
         }
@@ -596,11 +498,12 @@
                 lastPipeTime = timestamp;
             }
 
-            // 1. Draw Background (Nebula)
             drawBackground();
 
             player.update();
             player.draw();
+
+            checkCollision(); // Check collision after update
 
             for (let i = pipes.length - 1; i >= 0; i--) {
                 const p = pipes[i];
@@ -612,45 +515,61 @@
                 }
             }
 
-            checkCollision();
-
             animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- NEBULA BACKGROUND LOGIC ---
+        function initNebula() {
+            nebulaParticles = [];
+            for (let i = 0; i < numParticles; i++) {
+                nebulaParticles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: Math.random() * 20 + 5,
+                    color: `rgba(${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 50) + 10}, ${Math.floor(Math.random() * 100) + 155}, 0.05)`,
+                    speed: Math.random() * 0.1 + 0.05
+                });
+            }
+        }
+
+        function drawBackground() {
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < nebulaParticles.length; i++) {
+                let p = nebulaParticles[i];
+                
+                p.x -= p.speed;
+                if (p.x < -p.radius) {
+                    p.x = canvas.width + p.radius;
+                    p.y = Math.random() * canvas.height;
+                }
+
+                let gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
+                gradient.addColorStop(0, p.color.replace('0.05', '0.2'));
+                gradient.addColorStop(1, p.color.replace('0.05', '0'));
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         // --- EVENT LISTENERS ---
         
         function setupEventListeners() {
-            // On first user gesture, make sure audio context can run in browsers that block audio until gesture
-            function unlockAudioOnFirstGesture() {
-                AudioEngine.resumeIfNeeded();
-                // We don't auto-start music here to avoid surprising users — music will start when they start the game.
-                window.removeEventListener('touchstart', unlockAudioOnFirstGesture);
-                window.removeEventListener('mousedown', unlockAudioOnFirstGesture);
-            }
-            window.addEventListener('touchstart', unlockAudioOnFirstGesture, {passive:true});
-            window.addEventListener('mousedown', unlockAudioOnFirstGesture);
-
             gameContainer.addEventListener('click', jump);
             startScreen.addEventListener('click', jump);
             messageBox.addEventListener('click', jump);
-
-            // Also support keyboard space for desktop
-            window.addEventListener('keydown', (e) => {
-                if (e.code === 'Space') {
-                    e.preventDefault();
-                    jump();
-                }
-            });
         }
         
         // Resize handler
         window.addEventListener('resize', () => {
             canvas.width = canvas.offsetWidth;
             canvas.height = canvas.offsetHeight;
-            initNebula(); // Redraw nebula on resize
-            if (!gameRunning && !isGameOver) {
-                drawBackground(); // Redraw static background on setup screens
-            }
+            initNebula();
+            drawBackground();
         });
         
         // Initial setup
