@@ -244,11 +244,9 @@
             renderer.setSize(containerWidth, containerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             
-            // Append the renderer to the container here
             if (threeContainer.children.length === 0) {
                  threeContainer.appendChild(renderer.domElement);
             }
-
 
             // Lighting
             light = new THREE.PointLight(0xffffff, 1, 100);
@@ -287,7 +285,7 @@
             playerGroup.rotation.y = Math.PI / 2;
             
             playerMesh = playerGroup;
-            playerMesh.position.set(WORLD_X_PLAYER, 0, 0);
+            playerMesh.position.set(WORLD_X_PLAYER, playerY, 0); // Use current playerY
             scene.add(playerMesh);
         }
 
@@ -339,7 +337,6 @@
                 const pipeGroup = pipes[i];
                 const pipePos = pipeGroup.position;
                 
-                // Get anomaly positions relative to the scene
                 const topAnomaly = pipeGroup.children[0];
                 const bottomAnomaly = pipeGroup.children[1];
 
@@ -384,10 +381,6 @@
                 scene.remove(playerMesh);
             }
             
-            if (!renderer) {
-                setupThreeJS();
-            }
-
             createPlayerMesh();
             playerY = 0;
             playerVelocity = 0;
@@ -457,7 +450,7 @@
 
                 // Player Physics Update
                 playerVelocity += gravity;
-                playerY += playerVelocity * delta * 60; // Scale movement to delta time * constant
+                playerY += playerVelocity * delta * 60;
                 playerMesh.position.y = playerY;
 
                 // Player Rotation (Tilt)
@@ -513,10 +506,10 @@
         });
         
         window.onload = () => {
-            // Initial setup and render on load to make the scene visible
             setupThreeJS();
-            animate(); // Start the animation loop immediately to render the background
-            gameRunning = false; // Pause the game loop
+            // We call animate immediately to render the background and initial state
+            animate();
+            gameRunning = false; // Pause physics until user clicks
             startScreen.style.display = 'flex';
             setupEventListeners();
         };
