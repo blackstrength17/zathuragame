@@ -65,7 +65,7 @@
             visibility: hidden;
             transition: opacity 0.5s;
             border-radius: 15px;
-            cursor: pointer; /* Enable clicking the whole box to retry */
+            cursor: pointer;
         }
         #message-box.active {
             opacity: 1;
@@ -126,7 +126,7 @@
         const scoreDisplay = document.getElementById('score-display');
         const messageBox = document.getElementById('message-box');
         const finalScoreValue = document.getElementById('final-score-value');
-        const highScoreValue = document.getElementById('high-score-value'); // New element
+        const highScoreValue = document.getElementById('high-score-value');
         const highScoreMessage = document.getElementById('high-score-message');
         const gameContainer = document.getElementById('game-container');
         const startScreen = document.getElementById('start-screen');
@@ -156,10 +156,14 @@
             update() {
                 this.velocity += gravity;
                 this.y += this.velocity;
-                this.y = Math.max(0, Math.min(this.y, canvas.height - this.height));
-
-                if (this.y + this.height >= canvas.height) {
+                
+                // --- BOUNDARY CHECK (NEW) ---
+                if (this.y < 0 || this.y + this.height > canvas.height) {
                     endGame();
+                }
+                // If collision wasn't detected, update position
+                if (!isGameOver) {
+                     this.y = this.y;
                 }
             }
             draw() {
@@ -217,6 +221,7 @@
                 ctx.fill();
 
                 // Bottom Anomaly
+                ctx.fillStyle = '#000000';
                 ctx.beginPath();
                 ctx.arc(this.x + this.radius, this.gapY + this.gap / 2, this.radius, 0, Math.PI * 2);
                 ctx.fill();
@@ -270,6 +275,7 @@
             const playerCenterY = player.y + player.height / 2;
             const playerCenterX = player.x + player.width / 2;
 
+            // 1. Pipe Collision Check (Anomaly Collision)
             for (let i = 0; i < pipes.length; i++) {
                 const p = pipes[i];
                 const pipeCenter = p.x + p.width / 2;
@@ -317,13 +323,13 @@
             finalScoreValue.textContent = score;
             
             const currentHighScore = localStorage.getItem('telegramFlyerHighScore') || 0;
-            highScoreValue.textContent = currentHighScore; 
-
+            
             if (score > currentHighScore) {
                 localStorage.setItem('telegramFlyerHighScore', score);
                 highScoreValue.textContent = score; 
                 highScoreMessage.textContent = `NEW RECORD!`;
             } else {
+                highScoreValue.textContent = currentHighScore;
                 highScoreMessage.textContent = `Good job!`;
             }
 
@@ -347,6 +353,9 @@
             player.update();
             player.draw();
 
+            // Run collision check immediately after player update (which includes boundary check)
+            checkCollision();
+
             for (let i = pipes.length - 1; i >= 0; i--) {
                 const p = pipes[i];
                 p.update();
@@ -356,8 +365,6 @@
                     pipes.splice(i, 1);
                 }
             }
-
-            checkCollision();
 
             animationFrameId = requestAnimationFrame(gameLoop);
         }
@@ -388,7 +395,6 @@
             setupEventListeners();
         };
 
-        // Initialize the game when the window is loaded to set canvas dimensions
     </script>
 </body>
 </html>
