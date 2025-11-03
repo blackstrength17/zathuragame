@@ -30,10 +30,6 @@
             border: 3px solid #00FFFF;
             background: #000;
         }
-        #three-container {
-            width: 100%; 
-            height: 100%;
-        }
         canvas {
             display: block;
             width: 100%;
@@ -100,15 +96,12 @@
     </style>
     <!-- Telegram Game SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Three.js for 3D rendering -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Tone.js for Sound and Music Generation -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 </head>
 <body>
     <div id="game-container">
-        <!-- Three.js will render into this container -->
-        <div id="three-container"></div>
+        <canvas id="gameCanvas"></canvas>
         
         <div id="score-display">0</div>
 
@@ -131,38 +124,31 @@
     </div>
 
     <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
         const scoreDisplay = document.getElementById('score-display');
         const messageBox = document.getElementById('message-box');
         const finalScoreValue = document.getElementById('final-score-value');
         const highScoreValue = document.getElementById('high-score-value');
         const highScoreMessage = document.getElementById('high-score-message');
+        const gameContainer = document.getElementById('game-container');
         const startScreen = document.getElementById('start-screen');
-        const threeContainer = document.getElementById('three-container');
-
-        // --- THREE.JS GLOBALS ---
-        let scene, camera, renderer;
-        let playerMesh, light;
-        let pipes = [];
-        let clock = new THREE.Clock();
 
         // --- GAME VARIABLES ---
-        let score, isGameOver;
-        let playerY = 0;
-        let playerVelocity = 0;
-        const gravity = 0.0055;
-        const lift = -0.15;
-        const PIPE_GAP = 3.5;
-        const PIPE_WIDTH = 0.5;
-        const PIPE_SPEED = 0.015;
-        const PIPE_INTERVAL_TIME = 1500;
+        let player, pipes, score, isGameOver;
+        let gravity = 0.55;
+        let lift = -9;
+        let pipeWidth = 50;
+        let pipeGap = 160;
+        let pipeSpeed = 3.0;
+        let pipeInterval = 1800;
         let lastPipeTime = 0;
+        let animationFrameId;
         let gameRunning = false;
-        
-        // --- WORLD COORDINATES
-        const WORLD_HEIGHT = 5;
-        const WORLD_DEPTH = 10;
-        const WORLD_X_PLAYER = -3;
-        const CAMERA_Z = 6;
+
+        // --- BACKGROUND ASSETS (CODE-BASED) ---
+        let stars = [];
+        const numStars = 100; 
 
         // --- SOUND MANAGER (TONE.JS) ---
         const SoundManager = {
@@ -175,14 +161,12 @@
             init() {
                 if (this.initialized) return;
                 this.bgm = new Tone.PolySynth(Tone.Synth, {
-                    volume: -15,
-                    oscillator: { type: "sine" },
+                    volume: -15, oscillator: { type: "sine" },
                     envelope: { attack: 2, decay: 1, sustain: 0.8, release: 3 }
                 }).toDestination();
                 
                 this.jumpSynth = new Tone.Synth({
-                    volume: -15,
-                    oscillator: { type: "triangle" },
+                    volume: -15, oscillator: { type: "triangle" },
                     envelope: { attack: 0.005, decay: 0.1, sustain: 0.1, release: 0.3 }
                 }).toDestination();
 
@@ -192,8 +176,7 @@
                 }).toDestination();
 
                 this.endNoise = new Tone.NoiseSynth({
-                    volume: -10,
-                    noise: { type: "brown" },
+                    volume: -10, noise: { type: "brown" },
                     envelope: { attack: 0.001, decay: 1.0, sustain: 0.0, release: 1.0 }
                 }).toDestination();
 
@@ -220,221 +203,244 @@
             }
         };
 
-
-        // --- THREE.JS SETUP ---
-
-        function setupThreeJS() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a1a); 
-
-            // Camera setup 
-            const containerWidth = threeContainer.clientWidth;
-            const containerHeight = threeContainer.clientHeight;
-            const aspectRatio = containerWidth / containerHeight;
-            const viewSize = WORLD_HEIGHT; 
-            
-            camera = new THREE.OrthographicCamera(
-                viewSize * aspectRatio / -2, viewSize * aspectRatio / 2,
-                viewSize / 2, viewSize / -2, 
-                0.1, 100 
-            );
-            camera.position.z = CAMERA_Z;
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(containerWidth, containerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            
-            if (threeContainer.children.length === 0) {
-                 threeContainer.appendChild(renderer.domElement);
+        // --- BACKGROUND STAR FIELD LOGIC ---
+        function initStars() {
+            stars = [];
+            for (let i = 0; i < numStars; i++) {
+                stars.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 2 + 0.5,
+                    speed: Math.random() * 0.5 + 0.2,
+                    color: `rgba(255, 255, 255, ${Math.random() * 0.8 + 0.2})`
+                });
             }
-
-            // Lighting
-            light = new THREE.PointLight(0xffffff, 1, 100);
-            light.position.set(0, 0, 5);
-            scene.add(light);
-            scene.add(new THREE.AmbientLight(0x404040, 2)); 
-
-            // Background Stars/Nebula
-            const starsGeometry = new THREE.BufferGeometry();
-            const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.7 });
-            const starVertices = [];
-            for (let i = 0; i < 500; i++) {
-                const x = (Math.random() - 0.5) * 50;
-                const y = (Math.random() - 0.5) * 50;
-                const z = (Math.random() - 0.5) * 50;
-                starVertices.push(x, y, z);
-            }
-            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-            scene.add(new THREE.Points(starsGeometry, starsMaterial));
         }
 
-        function createPlayerMesh() {
-            const bodyGeo = new THREE.BoxGeometry(0.5, 0.3, 0.3);
-            const noseGeo = new THREE.ConeGeometry(0.15, 0.3, 8);
-            const mat = new THREE.MeshPhongMaterial({ color: 0xcccccc, shininess: 30 });
+        function drawBackground() {
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const body = new THREE.Mesh(bodyGeo, mat);
-            const nose = new THREE.Mesh(noseGeo, mat);
+            for (let i = 0; i < stars.length; i++) {
+                let s = stars[i];
+                s.x -= s.speed;
 
-            nose.position.set(-0.25, 0, 0);
-            nose.rotation.z = Math.PI / 2;
-
-            const playerGroup = new THREE.Group();
-            playerGroup.add(body, nose);
-            
-            playerGroup.rotation.y = Math.PI / 2;
-            
-            playerMesh = playerGroup;
-            playerMesh.position.set(WORLD_X_PLAYER, playerY, 0); 
-            scene.add(playerMesh);
-        }
-
-        function createPipe(gapY) {
-            const anomalyGroup = new THREE.Group();
-            const material = new THREE.MeshPhongMaterial({ color: 0x000000, shininess: 10 });
-            
-            // Top Anomaly
-            const topSphere = new THREE.Mesh(
-                new THREE.SphereGeometry(PIPE_WIDTH, 16, 16),
-                material
-            );
-            topSphere.position.set(0, gapY + PIPE_GAP / 2, 0);
-            topSphere.castShadow = true;
-            
-            // Bottom Anomaly
-            const bottomSphere = new THREE.Mesh(
-                new THREE.SphereGeometry(PIPE_WIDTH, 16, 16),
-                material
-            );
-            bottomSphere.position.set(0, gapY - PIPE_GAP / 2, 0);
-            bottomSphere.castShadow = true;
-
-            // Accretion Disk Glow
-            const glowLightColor = 0xFFA500; 
-            const topGlow = new THREE.PointLight(glowLightColor, 0.5, 3);
-            topGlow.position.copy(topSphere.position);
-            
-            const bottomGlow = new THREE.PointLight(glowLightColor, 0.5, 3);
-            bottomGlow.position.copy(bottomSphere.position);
-
-            anomalyGroup.add(topSphere, bottomSphere, topGlow, bottomGlow);
-            
-            anomalyGroup.position.set(WORLD_DEPTH, 0, 0); 
-            anomalyGroup.userData.scored = false;
-            anomalyGroup.userData.pipeRadius = PIPE_WIDTH;
-
-            scene.add(anomalyGroup);
-            return anomalyGroup;
-        }
-
-        // --- COLLISION AND GAME LOGIC ---
-
-        function check3DCollision() {
-            const playerPos = playerMesh.position;
-            const playerRadius = 0.5; 
-
-            for (let i = pipes.length - 1; i >= 0; i--) {
-                const pipeGroup = pipes[i];
-                const pipePos = pipeGroup.position;
-                
-                const topAnomaly = pipeGroup.children[0];
-                const bottomAnomaly = pipeGroup.children[1];
-
-                const topAnomalyPos = new THREE.Vector3().setFromMatrixPosition(topAnomaly.matrixWorld);
-                const bottomAnomalyPos = new THREE.Vector3().setFromMatrixPosition(bottomAnomaly.matrixWorld);
-
-                const distanceTop = playerPos.distanceTo(topAnomalyPos);
-                const distanceBottom = playerPos.distanceTo(bottomAnomalyPos);
-                
-                if (Math.abs(playerPos.x - pipePos.x) < 1.5) { 
-                    if (distanceTop < playerRadius + pipeGroup.userData.pipeRadius || 
-                        distanceBottom < playerRadius + pipeGroup.userData.pipeRadius) {
-                        endGame();
-                        return true;
-                    }
+                if (s.x < 0) {
+                    s.x = canvas.width;
+                    s.y = Math.random() * canvas.height;
                 }
 
-                if (pipePos.x < playerPos.x && !pipeGroup.userData.scored) {
-                    score++;
-                    scoreDisplay.textContent = score;
-                    pipeGroup.userData.scored = true;
-                    SoundManager.playScore();
-                }
+                ctx.fillStyle = s.color;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size / 2, 0, Math.PI * 2);
+                ctx.fill();
             }
-
-            // Boundary Check (Top and Bottom)
-            const halfWorldHeight = WORLD_HEIGHT / 2;
-            if (playerPos.y > halfWorldHeight || playerPos.y < -halfWorldHeight) {
-                endGame();
-                return true;
-            }
-            return false;
         }
 
 
-        // --- GAME FLOW ---
+        // --- GAME OBJECTS ---
+        class Player {
+            constructor() {
+                this.x = canvas.width / 4;
+                this.y = canvas.height / 2;
+                this.width = 40;
+                this.height = 25;
+                this.velocity = 0;
+            }
+            update() {
+                this.velocity += gravity;
+                this.y += this.velocity;
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+                
+                let angle = Math.min(Math.PI / 6, Math.max(-Math.PI / 6, this.velocity * 0.04));
+                ctx.rotate(angle);
+                
+                // Main Body (Slightly more shuttle-like)
+                ctx.fillStyle = '#C0C0C0'; // Light grey
+                ctx.strokeStyle = '#808080'; // Darker grey for outline
+                ctx.lineWidth = 1;
+
+                ctx.beginPath();
+                ctx.moveTo(-this.width / 2, 0); 
+                ctx.lineTo(-this.width / 2 + 10, -this.height / 2 + 5); 
+                ctx.lineTo(this.width / 2 - 5, -this.height / 2 + 5); 
+                ctx.lineTo(this.width / 2, 0); 
+                ctx.lineTo(this.width / 2 - 5, this.height / 2 - 5); 
+                ctx.lineTo(-this.width / 2 + 10, this.height / 2 - 5); 
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                // Cockpit Window (Blue)
+                ctx.fillStyle = '#4A90E2'; 
+                ctx.beginPath();
+                ctx.ellipse(this.width / 2 - 12, 0, 6, 4, 0, 0, Math.PI * 2); 
+                ctx.fill();
+                ctx.strokeStyle = '#FFFFFF'; 
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+
+                // Engine Nozzle (rear, with glow based on thrust)
+                let thrusterColor = this.velocity < lift + 1 ? '#FFD700' : '#FFA500'; 
+                if (this.velocity > -5) { 
+                    ctx.fillStyle = thrusterColor;
+                    ctx.beginPath();
+                    ctx.moveTo(-this.width / 2 - 5, -5); 
+                    ctx.lineTo(-this.width / 2, -10); 
+                    ctx.lineTo(-this.width / 2 + 5, -10); 
+                    ctx.lineTo(-this.width / 2 + 5, 10); 
+                    ctx.lineTo(-this.width / 2, 10); 
+                    ctx.lineTo(-this.width / 2 - 5, 5); 
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        class Pipe {
+            constructor(gapY) {
+                this.x = canvas.width;
+                this.width = pipeWidth;
+                this.gap = pipeGap;
+                this.gapY = gapY;
+                this.scored = false;
+                this.radius = pipeWidth / 2;
+            }
+            update() {
+                this.x -= pipeSpeed;
+            }
+            draw() {
+                const glowColor = '#FFD700';
+                
+                // Top Anomaly
+                ctx.fillStyle = '#000000';
+                ctx.shadowColor = glowColor;
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(this.x + this.radius, this.gapY - this.gap / 2, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bottom Anomaly
+                ctx.beginPath();
+                ctx.arc(this.x + this.radius, this.gapY + this.gap / 2, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // --- GAME LOGIC ---
 
         function initGame() {
-            if (isGameOver) {
-                pipes.forEach(p => scene.remove(p));
-                pipes = [];
-                // Remove old player mesh
-                if (playerMesh) {
-                    scene.remove(playerMesh);
-                }
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
             }
+
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
             
-            createPlayerMesh(); // Fix: Call createPlayerMesh here
-            playerY = 0;
-            playerVelocity = 0;
+            player = new Player();
+            pipes = [];
             score = 0;
             isGameOver = false;
             gameRunning = true;
-            lastPipeTime = 0;
             scoreDisplay.textContent = score;
             messageBox.classList.remove('active');
             startScreen.style.display = 'none';
             
             SoundManager.startBGM();
-
-            if (!animationFrameId) {
-                animate();
-            }
+            gameLoop();
         }
         
-        async function jump() {
+        async function handleStartGame() {
             if (!SoundManager.initialized) {
                 await Tone.start();
                 SoundManager.init();
             }
-
-            if (isGameOver) {
+            
+            // This logic handles START, RETRY, and JUMP safely
+            if (isGameOver || !gameRunning) {
                 initGame();
                 return;
             }
-            if (!gameRunning) {
-                initGame();
-                return;
-            }
-            playerVelocity = lift;
+            
+            // This is the jump action during active play
             SoundManager.playJump();
+            player.velocity = lift;
+        }
+
+        function spawnPipe() {
+            const gapY = Math.random() * (canvas.height - 2 * pipeGap) + pipeGap;
+            pipes.push(new Pipe(gapY));
+        }
+
+        function checkCollision() {
+            const playerCenterY = player.y + player.height / 2;
+            const playerCenterX = player.x + player.width / 2;
+
+            // 1. Boundary Collision Check
+            if (player.y < 0 || player.y + player.height > canvas.height) {
+                endGame();
+                return true;
+            }
+
+            // 2. Pipe Collision Check (Anomaly Collision)
+            for (let i = 0; i < pipes.length; i++) {
+                const p = pipes[i];
+                
+                if (
+                    player.x < p.x + p.width &&
+                    player.x + player.width > p.x
+                ) {
+                    const pipeCenter = p.x + p.width / 2;
+                    const topAnomalyY = p.gapY - p.gap / 2;
+                    const dxT = playerCenterX - pipeCenter;
+                    const dyT = playerCenterY - topAnomalyY;
+                    const distT = Math.sqrt(dxT * dxT + dyT * dyT);
+
+                    const bottomAnomalyY = p.gapY + p.gap / 2;
+                    const dxB = playerCenterX - pipeCenter;
+                    const dyB = playerCenterY - bottomAnomalyY;
+                    const distB = Math.sqrt(dxB * dxB + dyB * dyB);
+                    
+                    const playerCollisionRadius = Math.max(player.width, player.height) / 2 - 5; 
+
+                    if (distT < p.radius + playerCollisionRadius || distB < p.radius + playerCollisionRadius) {
+                        endGame();
+                        return true;
+                    }
+                }
+
+                if (p.x + p.width / 2 < player.x && !p.scored) {
+                    score++;
+                    scoreDisplay.textContent = score;
+                    SoundManager.playScore();
+                    p.scored = true;
+                }
+            }
+            return false;
         }
 
         function endGame() {
             if (isGameOver) return;
             isGameOver = true;
             gameRunning = false;
+            cancelAnimationFrame(animationFrameId);
             SoundManager.stopBGM();
             SoundManager.playGameOver();
             
-            const finalScore = score;
-            finalScoreValue.textContent = finalScore;
+            finalScoreValue.textContent = score;
             
             const currentHighScore = localStorage.getItem('telegramFlyerHighScore') || 0;
             
-            if (finalScore > currentHighScore) {
-                localStorage.setItem('telegramFlyerHighScore', finalScore);
-                highScoreValue.textContent = finalScore; 
+            if (score > currentHighScore) {
+                localStorage.setItem('telegramFlyerHighScore', score);
+                highScoreValue.textContent = score; 
                 highScoreMessage.textContent = `NEW RECORD!`;
             } else {
                 highScoreValue.textContent = currentHighScore;
@@ -444,75 +450,61 @@
             messageBox.classList.add('active');
         }
 
-        function animate() {
-            animationFrameId = requestAnimationFrame(animate);
-            const delta = clock.getDelta();
-            
-            if (gameRunning) {
-                const elapsed = clock.getElapsedTime();
+        function gameLoop(timestamp) {
+            if (isGameOver || !gameRunning) return;
 
-                // Player Physics Update
-                playerVelocity += gravity;
-                playerY += playerVelocity * delta * 60;
-                playerMesh.position.y = playerY;
+            if (!lastPipeTime) lastPipeTime = timestamp;
 
-                // Player Rotation (Tilt)
-                playerMesh.rotation.z = Math.min(Math.PI / 4, Math.max(-Math.PI / 4, -playerVelocity * 2));
-                
-                // Pipe Spawning
-                if (elapsed * 1000 - lastPipeTime > PIPE_INTERVAL_TIME) {
-                    const gapY = (Math.random() * (WORLD_HEIGHT - PIPE_GAP * 2)) - (WORLD_HEIGHT / 2 - PIPE_GAP);
-                    pipes.push(createPipe(gapY));
-                    lastPipeTime = elapsed * 1000;
-                }
-
-                // Pipe Movement and Removal
-                for (let i = pipes.length - 1; i >= 0; i--) {
-                    const pipeGroup = pipes[i];
-                    pipeGroup.position.x -= PIPE_SPEED * delta * 60; 
-
-                    if (pipeGroup.position.x < -WORLD_DEPTH / 2) {
-                        scene.remove(pipeGroup);
-                        pipes.splice(i, 1);
-                    }
-                }
-                
-                check3DCollision();
+            if (timestamp - lastPipeTime > pipeInterval) {
+                spawnPipe();
+                lastPipeTime = timestamp;
             }
+
+            drawBackground(); 
             
-            renderer.render(scene, camera);
+            player.update();
+            player.draw();
+
+            checkCollision();
+
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                const p = pipes[i];
+                p.update();
+                p.draw();
+                
+                if (p.x + p.width < 0) {
+                    pipes.splice(i, 1);
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(gameLoop);
         }
 
-        // --- INITIALIZATION ---
+        // --- EVENT LISTENERS ---
         
         function setupEventListeners() {
-            document.getElementById('game-container').addEventListener('click', jump);
-            startScreen.addEventListener('click', jump);
-            messageBox.addEventListener('click', jump);
+            gameContainer.addEventListener('click', handleStartGame);
+            startScreen.addEventListener('click', handleStartGame);
+            messageBox.addEventListener('click', handleStartGame);
         }
-
+        
+        // Resize handler
         window.addEventListener('resize', () => {
-            if (renderer) {
-                const containerWidth = threeContainer.clientWidth;
-                const containerHeight = threeContainer.clientHeight;
-                const aspectRatio = containerWidth / containerHeight;
-                const viewSize = WORLD_HEIGHT;
-
-                camera.left = viewSize * aspectRatio / -2;
-                camera.right = viewSize * aspectRatio / 2;
-                camera.top = viewSize / 2;
-                camera.bottom = viewSize / -2;
-                camera.updateProjectionMatrix();
-                
-                renderer.setSize(containerWidth, containerHeight);
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            if (!gameRunning && !isGameOver) {
+                drawBackground();
             }
         });
         
+        // Initial setup
         window.onload = () => {
-            setupThreeJS();
-            // We call animate immediately to render the background and initial state
-            animate();
-            gameRunning = false; // Pause physics until user clicks
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            
+            initStars(); 
+            drawBackground(); 
+
             startScreen.style.display = 'flex';
             setupEventListeners();
         };
